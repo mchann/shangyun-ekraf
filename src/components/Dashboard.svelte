@@ -11,21 +11,24 @@
     delConfirmId,
     authUser,
     theme,
-    activeTab
+    activeTab,
+    orders
   } from '../stores/store.js';
   import { img, ph, rp, normWa, waLocal } from '../data/seed.js';
 
-  // Active Menu in Sidebar: 'overview' | 'products' | 'wa' | 'admin'
-  let currentMenu = 'overview';
+  // Active Menu in Sidebar:
+  // For Admin: 'admin' (HANYA Daftar Seller)
+  // For Seller: 'overview' | 'orders' | 'products' | 'wa'
+  let currentMenu = $currentRole === 'admin' ? 'admin' : 'overview';
   let sidebarOpen = false;
   let showNotifications = false;
 
-  // Sync role to admin tab if role is admin
-  $: if ($currentRole === 'admin' && currentMenu === 'admin') {
-    // admin section
+  // Auto-lock menu to 'admin' whenever role is admin
+  $: if ($currentRole === 'admin') {
+    currentMenu = 'admin';
   }
 
-  // Active seller object
+  // Active seller object (Khusus mode Seller)
   $: activeSeller = $sellers.find((s) => s.id === $activeSellerId) || $sellers[0] || {
     id: 's1',
     nama: 'Master Chen Zhao',
@@ -55,22 +58,81 @@
     }
   }
 
-  // Seller filtered products
+  // ========================================================
+  // SELLER INCOMING ORDERS (PESANAN MASUK KHUSUS GERAI INI)
+  // - Filter strictly by seller_id === activeSeller.id
+  // ========================================================
+  $: sellerOrders = $orders.filter((o) => o.seller_id === activeSeller.id);
+  $: pendingOrders = sellerOrders.filter((o) => o.status === 'Menunggu Konfirmasi');
+  $: processingOrders = sellerOrders.filter((o) => o.status === 'Diproses');
+  $: completedOrders = sellerOrders.filter((o) => o.status === 'Selesai');
+  $: sellerOrdersRevenue = sellerOrders
+    .filter((o) => o.status !== 'Dibatalkan')
+    .reduce((acc, o) => acc + (Number(o.total) || 0), 0);
+
+  let orderFilterStatus = 'all'; // 'all' | 'Menunggu Konfirmasi' | 'Diproses' | 'Selesai'
+  $: filteredSellerOrders = orderFilterStatus === 'all'
+    ? sellerOrders
+    : sellerOrders.filter((o) => o.status === orderFilterStatus);
+
+  function handleConfirmOrder(order) {
+    orders.updateStatus(order.id, 'Diproses');
+    showToast(`Pesanan #${order.id} berhasil dikonfirmasi dan sedang diproses.`);
+  }
+
+  function handleCompleteOrder(order) {
+    orders.updateStatus(order.id, 'Selesai');
+    showToast(`Pesanan #${order.id} ditandai selesai dan siap dikirim.`);
+  }
+
+  function handleCancelOrder(order) {
+    if (confirm(`Batalkan pesanan #${order.id}?`)) {
+      orders.updateStatus(order.id, 'Dibatalkan');
+      showToast(`Pesanan #${order.id} dibatalkan.`);
+    }
+  }
+
+  function handleContactBuyerWa(order) {
+    if (!order.buyer_wa) {
+      showToast('Nomor WhatsApp pembeli tidak tercatat.');
+      return;
+    }
+    const msg = `Halo ${order.buyer_name}, kami dari ${activeSeller.nama_toko} ingin mengonfirmasi pesanan #${order.id} Anda di Shang Yun.`;
+    const url = `https://wa.me/${normWa(order.buyer_wa)}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  // ========================================================
+  // SELLER PRODUCTS & METRICS
+  // ========================================================
   $: sellerProducts = $items.filter((p) => p.seller_id === activeSeller.id);
   let sellerSelectedCategory = 'all';
   $: filteredSellerProducts = sellerSelectedCategory === 'all'
     ? sellerProducts
     : sellerProducts.filter((p) => p.kategori === sellerSelectedCategory);
 
-  // Metrics for Seller
   $: sellerTotalStok = sellerProducts.reduce((acc, p) => acc + (Number(p.stok) || 0), 0);
   $: sellerCats = Array.from(new Set(sellerProducts.map((p) => p.kategori).filter(Boolean)));
   $: sellerUnggulan = sellerProducts.filter((p) => p.unggulan).length;
 
-  // Metrics for Admin / Platform
+  // ========================================================
+  // ADMIN PLATFORM & MITRA GERAI DIRECTORY
+  // - Khusus Role Admin (Hanya menampilkan daftar seller)
+  // ========================================================
+  let adminSellerSearch = '';
+  let adminSellerSpec = 'all';
   $: adminTotalStok = $items.reduce((acc, p) => acc + (Number(p.stok) || 0), 0);
-  $: adminTotalValue = $items.reduce((acc, p) => acc + ((Number(p.harga) || 0) * (Number(p.stok) || 0)), 0);
-  $: adminCats = Array.from(new Set($items.map((p) => p.kategori).filter(Boolean)));
+  $: adminAllSpecs = Array.from(new Set($sellers.map((s) => s.spesialisasi).filter(Boolean)));
+  $: filteredAdminSellers = $sellers.filter((s) => {
+    const qClean = adminSellerSearch.trim().toLowerCase();
+    const matchSearch = !qClean || 
+      (s.nama && s.nama.toLowerCase().includes(qClean)) ||
+      (s.nama_toko && s.nama_toko.toLowerCase().includes(qClean)) ||
+      (s.spesialisasi && s.spesialisasi.toLowerCase().includes(qClean)) ||
+      (s.no_wa && s.no_wa.includes(adminSellerSearch.replace(/\D/g, '')));
+    const matchSpec = adminSellerSpec === 'all' || s.spesialisasi === adminSellerSpec;
+    return matchSearch && matchSpec;
+  });
 
   // Notifications Mock Data
   let notifications = [
@@ -167,58 +229,18 @@
       <div class="seal" aria-hidden="true">尚</div>
       <div class="brand-info">
         <span class="brand-title">Shang Yun</span>
-        <span class="brand-desc">Atelier Dashboard</span>
+        <span class="brand-desc">
+          {$currentRole === 'admin' ? 'Admin Platform' : 'Atelier Dashboard'}
+        </span>
       </div>
     </div>
 
     <!-- Navigation Menu Items -->
     <nav class="sidebar-menu">
-      <button 
-        type="button" 
-        class="menu-item" 
-        class:active={currentMenu === 'overview'}
-        on:click={() => { currentMenu = 'overview'; sidebarOpen = false; }}
-      >
-        <svg class="menu-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="7" height="7" rx="1.5" />
-          <rect x="14" y="3" width="7" height="7" rx="1.5" />
-          <rect x="14" y="14" width="7" height="7" rx="1.5" />
-          <rect x="3" y="14" width="7" height="7" rx="1.5" />
-        </svg>
-        <span>Dashboard Ringkasan</span>
-      </button>
-
-      <button 
-        type="button" 
-        class="menu-item" 
-        class:active={currentMenu === 'products'}
-        on:click={() => { currentMenu = 'products'; sidebarOpen = false; }}
-      >
-        <svg class="menu-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-          <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-          <line x1="12" y1="22.08" x2="12" y2="12" />
-        </svg>
-        <span>Kelola Karya & Stok</span>
-      </button>
-
-      <button 
-        type="button" 
-        class="menu-item" 
-        class:active={currentMenu === 'wa'}
-        on:click={() => { currentMenu = 'wa'; sidebarOpen = false; }}
-      >
-        <svg class="menu-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-        </svg>
-        <span>Pemesanan WhatsApp</span>
-      </button>
-
       {#if $currentRole === 'admin'}
         <button 
           type="button" 
-          class="menu-item" 
-          class:active={currentMenu === 'admin'}
+          class="menu-item active" 
           on:click={() => { currentMenu = 'admin'; sidebarOpen = false; }}
         >
           <svg class="menu-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
@@ -227,7 +249,65 @@
             <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
             <path d="M16 3.13a4 4 0 0 1 0 7.75" />
           </svg>
-          <span>Platform & Kemitraan</span>
+          <span>Daftar Mitra Gerai (Seller)</span>
+        </button>
+      {:else}
+        <button 
+          type="button" 
+          class="menu-item" 
+          class:active={currentMenu === 'overview'}
+          on:click={() => { currentMenu = 'overview'; sidebarOpen = false; }}
+        >
+          <svg class="menu-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1.5" />
+            <rect x="14" y="3" width="7" height="7" rx="1.5" />
+            <rect x="14" y="14" width="7" height="7" rx="1.5" />
+            <rect x="3" y="14" width="7" height="7" rx="1.5" />
+          </svg>
+          <span>Dashboard Ringkasan</span>
+        </button>
+
+        <button 
+          type="button" 
+          class="menu-item" 
+          class:active={currentMenu === 'orders'}
+          on:click={() => { currentMenu = 'orders'; sidebarOpen = false; }}
+        >
+          <svg class="menu-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <path d="M16 10a4 4 0 0 1-8 0" />
+          </svg>
+          <span>Pesanan Masuk</span>
+          {#if pendingOrders.length > 0}
+            <span class="menu-badge-pill">{pendingOrders.length}</span>
+          {/if}
+        </button>
+
+        <button 
+          type="button" 
+          class="menu-item" 
+          class:active={currentMenu === 'products'}
+          on:click={() => { currentMenu = 'products'; sidebarOpen = false; }}
+        >
+          <svg class="menu-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+            <line x1="12" y1="22.08" x2="12" y2="12" />
+          </svg>
+          <span>Kelola Karya & Stok</span>
+        </button>
+
+        <button 
+          type="button" 
+          class="menu-item" 
+          class:active={currentMenu === 'wa'}
+          on:click={() => { currentMenu = 'wa'; sidebarOpen = false; }}
+        >
+          <svg class="menu-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+          </svg>
+          <span>Pemesanan WhatsApp</span>
         </button>
       {/if}
 
@@ -257,9 +337,9 @@
           <span class="online-indicator" title="Status Online"></span>
         </div>
         <div class="user-info-text">
-          <span class="user-real-name">{$authUser?.name || activeSeller.nama}</span>
+          <span class="user-real-name">{$currentRole === 'admin' ? 'Administrator' : ($authUser?.name || activeSeller.nama)}</span>
           <span class="user-status-label">
-            {$currentRole === 'admin' ? 'Administrator' : 'Pengrajin Aktif'}
+            {$currentRole === 'admin' ? 'Admin Platform' : 'Pengrajin Aktif'}
           </span>
         </div>
         <button 
@@ -327,24 +407,40 @@
         </button>
         <div class="page-title-wrap">
           <h1 class="page-title">
-            {currentMenu === 'overview' ? 'Dashboard' : 
-             currentMenu === 'products' ? 'Kelola Karya & Stok' : 
-             currentMenu === 'wa' ? 'Pengaturan WhatsApp' : 'Pengawasan Platform'}
+            {#if $currentRole === 'admin'}
+              Daftar Mitra Gerai (Seller)
+            {:else if currentMenu === 'overview'}
+              Dashboard Ringkasan
+            {:else if currentMenu === 'orders'}
+              Pesanan Masuk
+            {:else if currentMenu === 'products'}
+              Kelola Karya & Stok
+            {:else}
+              Pengaturan WhatsApp
+            {/if}
           </h1>
-          <span class="page-subtitle">Atelier {activeSeller.nama_toko}</span>
+          <span class="page-subtitle">
+            {#if $currentRole === 'admin'}
+              Portal Pengawasan Platform Shang Yun
+            {:else}
+              Atelier {activeSeller.nama_toko}
+            {/if}
+          </span>
         </div>
       </div>
 
       <div class="topbar-right">
-        <!-- Toko Selector Dropdown -->
-        <div class="seller-picker">
-          <label for="dash-seller-select" class="picker-label">Gerai:</label>
-          <select id="dash-seller-select" bind:value={$activeSellerId} class="seller-select-clean">
-            {#each $sellers as s}
-              <option value={s.id}>{s.nama_toko}</option>
-            {/each}
-          </select>
-        </div>
+        <!-- Toko Selector Dropdown HANYA untuk seller (jika seller ingin tes / switch antar gerai) -->
+        {#if $currentRole !== 'admin'}
+          <div class="seller-picker">
+            <label for="dash-seller-select" class="picker-label">Gerai:</label>
+            <select id="dash-seller-select" bind:value={$activeSellerId} class="seller-select-clean">
+              {#each $sellers as s}
+                <option value={s.id}>{s.nama_toko}</option>
+              {/each}
+            </select>
+          </div>
+        {/if}
 
         <!-- Notification Bell Widget -->
         <div class="notif-wrap">
@@ -400,241 +496,126 @@
 
     <!-- Main Canvas Content -->
     <main class="dash-main-scroll" data-lenis-prevent tabindex="0">
-      {#if currentMenu === 'overview' || currentMenu === 'products'}
-        <!-- ==================== BANNER SELAMAT DATANG (Sesuai Referensi) ==================== -->
-        <div class="welcome-banner-card">
-          <!-- Chinese Calligraphy & Auspicious Motif Watermark Background -->
+      {#if $currentRole === 'admin'}
+        <!-- ========================================================
+             TAMPILAN ADMIN: HANYA DAFTAR SELLER (MITRA GERAI)
+             ======================================================== -->
+        <div class="welcome-banner-card admin-banner">
           <div class="banner-chinese-watermark" aria-hidden="true">
-            <span class="watermark-calligraphy" lang="zh">尚韵匠心 · 岁岁平安 · 福禄吉祥</span>
-            <svg class="watermark-cloud-svg" viewBox="0 0 160 80" fill="currentColor">
-              <path d="M120 40c0-11-9-20-20-20-2 0-4 0-6 1-4-12-15-21-29-21-16 0-30 13-30 29 0 2 0 4 1 6-3-1-6-2-10-2-14 0-26 11-26 25s12 25 26 25h94c11 0 20-9 20-20s-9-20-20-20c2-1 4-2 6-3z" />
-            </svg>
+            <span class="watermark-calligraphy" lang="zh">尚韵匠心 · 盟约共荣 · 岁序流芳</span>
           </div>
-
           <div class="banner-text-col">
-            <span class="banner-greeting">
-              Selamat datang kembali, {$authUser?.name || activeSeller.nama}!
-            </span>
+            <span class="banner-greeting">Portal Administrator Platform</span>
             <p class="banner-subtext">
-              Gerai <b>{activeSeller.nama_toko}</b> siap melayani pesanan kriya Imlek. Unggah koleksi terbaru Anda dan optimalkan stok gerai.
+              Kelola dan awasi seluruh direktori gerai perajin kriya resmi Shang Yun. Pantau legalitas atelier, kontak WhatsApp resmi, dan portofolio karya para mitra.
             </p>
             <div class="banner-actions-row">
-              <button class="banner-btn primary" on:click={openAddModal}>
-                + Upload Karya Baru
+              <button class="banner-btn primary" on:click={openAddSellerModal}>
+                + Daftarkan Gerai Baru
               </button>
               <button class="banner-btn secondary" on:click={goToCollection}>
-                Lihat di Katalog Publik
+                Lihat Katalog Publik
               </button>
             </div>
           </div>
           <div class="banner-avatar-col">
             <div class="banner-portrait-seal">
-              <span class="seal-glyph" lang="zh">匠</span>
+              <span class="seal-glyph" lang="zh">盟</span>
             </div>
           </div>
         </div>
 
-        <!-- ==================== 4 STAT CARDS (Sesuai Referensi) ==================== -->
+        <!-- 4 Stat Cards Khusus Admin -->
         <div class="stats-grid-row">
+          <div class="stat-card">
+            <span class="stat-watermark" lang="zh" aria-hidden="true">店</span>
+            <div class="stat-header">
+              <span class="stat-ico-badge" lang="zh">店</span>
+              <span class="stat-name">Mitra Gerai</span>
+            </div>
+            <b class="stat-number">{$sellers.length}</b>
+            <span class="stat-footer-text">Atelier perajin terdaftar</span>
+          </div>
+
           <div class="stat-card">
             <span class="stat-watermark" lang="zh" aria-hidden="true">品</span>
             <div class="stat-header">
               <span class="stat-ico-badge" lang="zh">品</span>
-              <span class="stat-name">Karya Diunggah</span>
+              <span class="stat-name">Total Karya Platform</span>
             </div>
-            <b class="stat-number">{sellerProducts.length}</b>
-            <span class="stat-footer-text">Koleksi terdaftar</span>
+            <b class="stat-number">{$items.length}</b>
+            <span class="stat-footer-text">Koleksi terkurasi Imlek</span>
           </div>
 
           <div class="stat-card">
             <span class="stat-watermark" lang="zh" aria-hidden="true">存</span>
             <div class="stat-header">
               <span class="stat-ico-badge" lang="zh">存</span>
-              <span class="stat-name">Stok Fisik</span>
+              <span class="stat-name">Stok Fisik Siap Kirim</span>
             </div>
-            <b class="stat-number">{sellerTotalStok}</b>
-            <span class="stat-footer-text">Total unit siap kirim</span>
+            <b class="stat-number">{adminTotalStok}</b>
+            <span class="stat-footer-text">Total unit kriya tersedia</span>
           </div>
 
           <div class="stat-card">
-            <span class="stat-watermark" lang="zh" aria-hidden="true">类</span>
+            <span class="stat-watermark" lang="zh" aria-hidden="true">安</span>
             <div class="stat-header">
-              <span class="stat-ico-badge" lang="zh">类</span>
-              <span class="stat-name">Kategori Gerai</span>
+              <span class="stat-ico-badge" lang="zh">安</span>
+              <span class="stat-name">Status Kemitraan</span>
             </div>
-            <b class="stat-number">{sellerCats.length}</b>
-            <span class="stat-footer-text">Ragam kriya Imlek</span>
-          </div>
-
-          <div class="stat-card">
-            <span class="stat-watermark" lang="zh" aria-hidden="true">珍</span>
-            <div class="stat-header">
-              <span class="stat-ico-badge" lang="zh">珍</span>
-              <span class="stat-name">Koleksi Unggulan</span>
-            </div>
-            <b class="stat-number">{sellerUnggulan}</b>
-            <span class="stat-footer-text">Karya pilihan berstempel</span>
+            <b class="stat-number">100%</b>
+            <span class="stat-footer-text">Terverifikasi & Aktif</span>
           </div>
         </div>
 
-        <!-- ==================== TABEL KARYA TOKO ==================== -->
+        <!-- Tabel Utama: DAFTAR SELLER / MITRA GERAI PLATFORM -->
         <div class="content-card-box">
-          <span class="card-corner-watermark" lang="zh" aria-hidden="true">尚韵</span>
-          <div class="card-box-header">
-            <div>
-              <h2 class="card-box-title">Daftar Karya Toko ({sellerProducts.length})</h2>
-              <span class="card-box-sub">Koleksi kriya yang sedang aktif ditampilkan di gerai {activeSeller.nama_toko}.</span>
-            </div>
-            <button class="btn sm" on:click={openAddModal}>
-              + Upload Karya Baru
-            </button>
-          </div>
-
-          {#if sellerCats.length > 0}
-            <div class="dash-category-filter-bar" aria-label="Filter kategori karya gerai">
-              <button 
-                type="button" 
-                class="dash-cat-pill" 
-                class:active={sellerSelectedCategory === 'all'}
-                on:click={() => (sellerSelectedCategory = 'all')}
-              >
-                Semua ({sellerProducts.length})
-              </button>
-              {#each sellerCats as cat}
-                {@const catCount = sellerProducts.filter(p => p.kategori === cat).length}
-                <button 
-                  type="button" 
-                  class="dash-cat-pill" 
-                  class:active={sellerSelectedCategory === cat}
-                  on:click={() => (sellerSelectedCategory = cat)}
-                >
-                  {cat} ({catCount})
-                </button>
-              {/each}
-            </div>
-          {/if}
-
-          <div class="tw">
-            <table>
-              <thead>
-                <tr>
-                  <th></th>
-                  <th>Nama Karya</th>
-                  <th>Kategori</th>
-                  <th>Harga</th>
-                  <th>Stok</th>
-                  <th>Unggulan</th>
-                  <th>Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {#if filteredSellerProducts.length === 0}
-                  <tr>
-                    <td colspan="7" class="empty-cell">
-                      {sellerProducts.length === 0 
-                        ? 'Belum ada karya yang diunggah untuk gerai ini. Pilih "+ Upload Karya Baru" untuk mulai menambahkan.' 
-                        : 'Tidak ada karya dalam kategori ini.'}
-                    </td>
-                  </tr>
-                {:else}
-                  {#each filteredSellerProducts as p (p.id)}
-                    <tr>
-                      <td>
-                        <img 
-                          class="th" 
-                          data-id={p.id} 
-                          src={img(p)} 
-                          alt="" 
-                          on:error={(e) => handleImgError(e, p)}
-                        />
-                      </td>
-                      <td class="nm">{p.nama}</td>
-                      <td><span class="cat-pill">{p.kategori}</span></td>
-                      <td class="pr">{rp(p.harga)}</td>
-                      <td>
-                        {#if p.stok < 1}
-                          <span class="st out" style="margin:0">Habis</span>
-                        {:else}
-                          <b>{p.stok} unit</b>
-                        {/if}
-                      </td>
-                      <td>
-                        {#if p.unggulan}
-                          <span class="mini" title="Karya Unggulan">珍</span>
-                        {/if}
-                      </td>
-                      <td class="act">
-                        <button class="lk" on:click={() => openEditModal(p.id)}>Ubah</button>
-                        <button class="lk del" on:click={() => handleDeleteClick(p.id)}>
-                          {$delConfirmId === p.id ? 'Yakin hapus?' : 'Hapus'}
-                        </button>
-                      </td>
-                    </tr>
-                  {/each}
-                {/if}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      {/if}
-
-      <!-- ==================== TAB KONTAK WHATSAPP ==================== -->
-      {#if currentMenu === 'overview' || currentMenu === 'wa'}
-        <div class="content-card-box" style="margin-top: 24px;">
-          <span class="card-corner-watermark" lang="zh" aria-hidden="true">信</span>
-          <div class="card-box-header">
-            <div>
-              <h2 class="card-box-title">Pemesanan WhatsApp Toko</h2>
-              <span class="card-box-sub">Nomor resmi gerai yang dihubungi calon pembeli saat menekan tombol pesan pada katalog.</span>
-            </div>
-          </div>
-
-          <div class="wap-grid">
-            <div class="wap-field">
-              <label for="wa-in-field">Nomor WhatsApp Gerai ({activeSeller.nama_toko})</label>
-              <input 
-                id="wa-in-field" 
-                type="tel" 
-                inputmode="numeric" 
-                pattern="[0-9]*"
-                placeholder="085738211550" 
-                autocomplete="off" 
-                bind:value={waInput}
-                on:input={(e) => { waInput = e.target.value.replace(/\D/g, ''); }}
-                on:keydown={(e) => {
-                  if (['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) || e.ctrlKey || e.metaKey) return;
-                  if (!/^\d$/.test(e.key)) e.preventDefault();
-                }}
-              />
-              {#if waErr}
-                <div class="err" role="alert">{waErr}</div>
-              {/if}
-            </div>
-            <div class="wap-info">
-              <span>Tautan Pemesanan Aktif:</span>
-              <a href="https://wa.me/{activeSeller.no_wa}" target="_blank" rel="noopener" class="wa-link-preview">
-                wa.me/{activeSeller.no_wa} ↗
-              </a>
-              <button class="btn" on:click={handleSaveSellerWa}>
-                Simpan Perubahan Nomor
-              </button>
-            </div>
-          </div>
-        </div>
-      {/if}
-
-      <!-- ==================== TAB ADMIN PLATFORM ==================== -->
-      {#if currentMenu === 'admin' && $currentRole === 'admin'}
-        <div class="content-card-box" style="margin-top: 24px;">
           <span class="card-corner-watermark" lang="zh" aria-hidden="true">盟</span>
           <div class="card-box-header">
             <div>
-              <h2 class="card-box-title">Mitra Gerai & Pengrajin Platform ({$sellers.length})</h2>
-              <span class="card-box-sub">Daftar atelier kriya resmi yang bermitra dengan Shang Yun.</span>
+              <h2 class="card-box-title">Daftar Mitra Gerai & Pengrajin Platform ({filteredAdminSellers.length})</h2>
+              <span class="card-box-sub">Direktori seluruh gerai kriya resmi yang terdaftar dan bermitra dengan Shang Yun.</span>
             </div>
             <button class="btn sm" on:click={openAddSellerModal}>
               + Daftarkan Gerai Baru
             </button>
+          </div>
+
+          <!-- Search & Filter Bar Gerai -->
+          <div class="admin-seller-filter-row">
+            <div class="admin-search-wrap">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input 
+                type="search" 
+                placeholder="Cari nama gerai, pengrajin, WhatsApp, atau spesialisasi..." 
+                bind:value={adminSellerSearch}
+              />
+            </div>
+
+            <div class="admin-spec-pills">
+              <button 
+                type="button" 
+                class="dash-cat-pill" 
+                class:active={adminSellerSpec === 'all'}
+                on:click={() => (adminSellerSpec = 'all')}
+              >
+                Semua ({$sellers.length})
+              </button>
+              {#each adminAllSpecs as spec}
+                {@const count = $sellers.filter(s => s.spesialisasi === spec).length}
+                <button 
+                  type="button" 
+                  class="dash-cat-pill" 
+                  class:active={adminSellerSpec === spec}
+                  on:click={() => (adminSellerSpec = spec)}
+                >
+                  {spec} ({count})
+                </button>
+              {/each}
+            </div>
           </div>
 
           <div class="tw">
@@ -644,27 +625,733 @@
                   <th>ID</th>
                   <th>Nama Pengrajin</th>
                   <th>Nama Gerai / Atelier</th>
-                  <th>Nomor WhatsApp</th>
+                  <th>WhatsApp Resmi</th>
                   <th>Spesialisasi</th>
                   <th>Koleksi Karya</th>
+                  <th>Status</th>
+                  <th>Aksi</th>
                 </tr>
               </thead>
               <tbody>
-                {#each $sellers as s (s.id)}
-                  {@const count = $items.filter((p) => p.seller_id === s.id).length}
+                {#if filteredAdminSellers.length === 0}
                   <tr>
-                    <td style="font-family: monospace; color: var(--gold);">{s.id}</td>
-                    <td class="nm">{s.nama}</td>
-                    <td style="font-weight: 500;">{s.nama_toko}</td>
-                    <td style="font-family: monospace;">+{s.no_wa}</td>
-                    <td><span class="cat-pill">{s.spesialisasi}</span></td>
-                    <td><b>{count} karya</b></td>
+                    <td colspan="8" class="empty-cell">
+                      Tidak ada data seller yang cocok dengan pencarian "{adminSellerSearch}".
+                    </td>
                   </tr>
-                {/each}
+                {:else}
+                  {#each filteredAdminSellers as s (s.id)}
+                    {@const count = $items.filter((p) => p.seller_id === s.id).length}
+                    {@const stok = $items.filter((p) => p.seller_id === s.id).reduce((acc, p) => acc + (Number(p.stok) || 0), 0)}
+                    <tr>
+                      <td style="font-family: monospace; color: var(--gold); font-weight: 600;">{s.id}</td>
+                      <td class="nm">
+                        <div class="seller-name-cell">
+                          <span class="seller-mini-avatar">{s.nama.charAt(0)}</span>
+                          <b>{s.nama}</b>
+                        </div>
+                      </td>
+                      <td style="font-weight: 600; color: var(--white);">{s.nama_toko}</td>
+                      <td style="font-family: monospace;">
+                        <a 
+                          href="https://wa.me/{s.no_wa}" 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          class="seller-wa-link"
+                          title="Hubungi WhatsApp {s.nama_toko}"
+                        >
+                          +{s.no_wa} ↗
+                        </a>
+                      </td>
+                      <td><span class="cat-pill">{s.spesialisasi}</span></td>
+                      <td>
+                        <b>{count} karya</b>
+                        <small style="display:block; color:var(--muted); font-size:11px;">({stok} unit stok)</small>
+                      </td>
+                      <td>
+                        <span class="st-badge active">
+                          <span class="st-dot"></span> Aktif
+                        </span>
+                      </td>
+                      <td class="act">
+                        <a 
+                          href="https://wa.me/{s.no_wa}" 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          class="lk" 
+                          title="Buka WhatsApp"
+                        >
+                          WhatsApp
+                        </a>
+                      </td>
+                    </tr>
+                  {/each}
+                {/if}
               </tbody>
             </table>
           </div>
         </div>
+
+      {:else}
+        <!-- ========================================================
+             TAMPILAN SELLER: OVERVIEW, PESANAN MASUK, KARYA, WA
+             ======================================================== -->
+        
+        {#if currentMenu === 'overview'}
+          <!-- ==================== BANNER SELAMAT DATANG SELLER ==================== -->
+          <div class="welcome-banner-card">
+            <div class="banner-chinese-watermark" aria-hidden="true">
+              <span class="watermark-calligraphy" lang="zh">尚韵匠心 · 岁岁平安 · 福禄吉祥</span>
+              <svg class="watermark-cloud-svg" viewBox="0 0 160 80" fill="currentColor">
+                <path d="M120 40c0-11-9-20-20-20-2 0-4 0-6 1-4-12-15-21-29-21-16 0-30 13-30 29 0 2 0 4 1 6-3-1-6-2-10-2-14 0-26 11-26 25s12 25 26 25h94c11 0 20-9 20-20s-9-20-20-20c2-1 4-2 6-3z" />
+              </svg>
+            </div>
+
+            <div class="banner-text-col">
+              <span class="banner-greeting">
+                Selamat datang kembali, {$authUser?.name || activeSeller.nama}!
+              </span>
+              <p class="banner-subtext">
+                Gerai <b>{activeSeller.nama_toko}</b> siap melayani pesanan kriya Imlek. Unggah koleksi terbaru Anda, kelola pesanan masuk, dan optimalkan stok gerai.
+              </p>
+              <div class="banner-actions-row">
+                <button class="banner-btn primary" on:click={openAddModal}>
+                  + Upload Karya Baru
+                </button>
+                <button class="banner-btn secondary" on:click={() => (currentMenu = 'orders')}>
+                  Lihat Pesanan Masuk ({pendingOrders.length})
+                </button>
+              </div>
+            </div>
+            <div class="banner-avatar-col">
+              <div class="banner-portrait-seal">
+                <span class="seal-glyph" lang="zh">匠</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4 Stat Cards Seller -->
+          <div class="stats-grid-row">
+            <div class="stat-card">
+              <span class="stat-watermark" lang="zh" aria-hidden="true">品</span>
+              <div class="stat-header">
+                <span class="stat-ico-badge" lang="zh">品</span>
+                <span class="stat-name">Karya Diunggah</span>
+              </div>
+              <b class="stat-number">{sellerProducts.length}</b>
+              <span class="stat-footer-text">Koleksi terdaftar di gerai</span>
+            </div>
+
+            <div class="stat-card">
+              <span class="stat-watermark" lang="zh" aria-hidden="true">存</span>
+              <div class="stat-header">
+                <span class="stat-ico-badge" lang="zh">存</span>
+                <span class="stat-name">Stok Fisik</span>
+              </div>
+              <b class="stat-number">{sellerTotalStok}</b>
+              <span class="stat-footer-text">Total unit siap kirim</span>
+            </div>
+
+            <div class="stat-card">
+              <span class="stat-watermark" lang="zh" aria-hidden="true">信</span>
+              <div class="stat-header">
+                <span class="stat-ico-badge" lang="zh">信</span>
+                <span class="stat-name">Pesanan Masuk</span>
+              </div>
+              <b class="stat-number">{sellerOrders.length}</b>
+              <span class="stat-footer-text">{pendingOrders.length} perlu konfirmasi</span>
+            </div>
+
+            <div class="stat-card">
+              <span class="stat-watermark" lang="zh" aria-hidden="true">珍</span>
+              <div class="stat-header">
+                <span class="stat-ico-badge" lang="zh">珍</span>
+                <span class="stat-name">Koleksi Unggulan</span>
+              </div>
+              <b class="stat-number">{sellerUnggulan}</b>
+              <span class="stat-footer-text">Karya pilihan berstempel</span>
+            </div>
+          </div>
+
+          <!-- Ringkasan Pesanan Masuk Terbaru Seller -->
+          <div class="content-card-box">
+            <span class="card-corner-watermark" lang="zh" aria-hidden="true">信</span>
+            <div class="card-box-header">
+              <div>
+                <h2 class="card-box-title">Pesanan Masuk Terbaru ({sellerOrders.length})</h2>
+                <span class="card-box-sub">Pesanan pelanggan katalog Shang Yun yang dialihkan khusus ke gerai {activeSeller.nama_toko}.</span>
+              </div>
+              <button class="btn sm" on:click={() => (currentMenu = 'orders')}>
+                Kelola Semua Pesanan &rarr;
+              </button>
+            </div>
+
+            {#if sellerOrders.length === 0}
+              <div class="empty-orders-banner">
+                <span class="empty-order-seal" lang="zh">福</span>
+                <p>Belum ada pesanan masuk untuk gerai ini. Pesanan dari pembeli akan otomatis diteruskan ke sini.</p>
+              </div>
+            {:else}
+              <div class="tw">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>No. Pesanan</th>
+                      <th>Tanggal</th>
+                      <th>Nama Pembeli</th>
+                      <th>Karya Dipesan</th>
+                      <th>Total</th>
+                      <th>Status</th>
+                      <th>Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each sellerOrders.slice(0, 3) as o (o.id)}
+                      <tr>
+                        <td style="font-family: monospace; color: var(--gold); font-weight:600;">#{o.id}</td>
+                        <td style="font-size: 12.5px; color: var(--muted);">{o.created_at}</td>
+                        <td class="nm"><b>{o.buyer_name}</b></td>
+                        <td>
+                          {#each o.items as item}
+                            <div style="font-size: 13px;">{item.nama} <small style="color:var(--gold);">x{item.qty}</small></div>
+                          {/each}
+                        </td>
+                        <td class="pr">{rp(o.total)}</td>
+                        <td>
+                          <span class="order-badge {o.status === 'Menunggu Konfirmasi' ? 'pending' : o.status === 'Diproses' ? 'process' : o.status === 'Selesai' ? 'done' : 'cancel'}">
+                            {o.status}
+                          </span>
+                        </td>
+                        <td class="act">
+                          <button class="lk" on:click={() => (currentMenu = 'orders')}>Detail</button>
+                        </td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            {/if}
+          </div>
+
+          <!-- Tabel Karya Toko -->
+          <div class="content-card-box" style="margin-top: 24px;">
+            <span class="card-corner-watermark" lang="zh" aria-hidden="true">尚韵</span>
+            <div class="card-box-header">
+              <div>
+                <h2 class="card-box-title">Daftar Karya Toko ({sellerProducts.length})</h2>
+                <span class="card-box-sub">Koleksi kriya yang sedang aktif ditampilkan di gerai {activeSeller.nama_toko}.</span>
+              </div>
+              <button class="btn sm" on:click={openAddModal}>
+                + Upload Karya Baru
+              </button>
+            </div>
+
+            {#if sellerCats.length > 0}
+              <div class="dash-category-filter-bar" aria-label="Filter kategori karya gerai">
+                <button 
+                  type="button" 
+                  class="dash-cat-pill" 
+                  class:active={sellerSelectedCategory === 'all'}
+                  on:click={() => (sellerSelectedCategory = 'all')}
+                >
+                  Semua ({sellerProducts.length})
+                </button>
+                {#each sellerCats as cat}
+                  {@const catCount = sellerProducts.filter(p => p.kategori === cat).length}
+                  <button 
+                    type="button" 
+                    class="dash-cat-pill" 
+                    class:active={sellerSelectedCategory === cat}
+                    on:click={() => (sellerSelectedCategory = cat)}
+                  >
+                    {cat} ({catCount})
+                  </button>
+                {/each}
+              </div>
+            {/if}
+
+            <div class="tw">
+              <table>
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Nama Karya</th>
+                    <th>Kategori</th>
+                    <th>Harga</th>
+                    <th>Stok</th>
+                    <th>Unggulan</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#if filteredSellerProducts.length === 0}
+                    <tr>
+                      <td colspan="7" class="empty-cell">
+                        {sellerProducts.length === 0 
+                          ? 'Belum ada karya yang diunggah untuk gerai ini. Pilih "+ Upload Karya Baru" untuk mulai menambahkan.' 
+                          : 'Tidak ada karya dalam kategori ini.'}
+                      </td>
+                    </tr>
+                  {:else}
+                    {#each filteredSellerProducts as p (p.id)}
+                      <tr>
+                        <td>
+                          <img 
+                            class="th" 
+                            data-id={p.id} 
+                            src={img(p)} 
+                            alt="" 
+                            on:error={(e) => handleImgError(e, p)}
+                          />
+                        </td>
+                        <td class="nm">{p.nama}</td>
+                        <td><span class="cat-pill">{p.kategori}</span></td>
+                        <td class="pr">{rp(p.harga)}</td>
+                        <td>
+                          {#if p.stok < 1}
+                            <span class="st out" style="margin:0">Habis</span>
+                          {:else}
+                            <b>{p.stok} unit</b>
+                          {/if}
+                        </td>
+                        <td>
+                          {#if p.unggulan}
+                            <span class="mini" title="Karya Unggulan">珍</span>
+                          {/if}
+                        </td>
+                        <td class="act">
+                          <button class="lk" on:click={() => openEditModal(p.id)}>Ubah</button>
+                          <button class="lk del" on:click={() => handleDeleteClick(p.id)}>
+                            {$delConfirmId === p.id ? 'Yakin hapus?' : 'Hapus'}
+                          </button>
+                        </td>
+                      </tr>
+                    {/each}
+                  {/if}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Pemesanan WhatsApp Toko -->
+          <div class="content-card-box" style="margin-top: 24px;">
+            <span class="card-corner-watermark" lang="zh" aria-hidden="true">信</span>
+            <div class="card-box-header">
+              <div>
+                <h2 class="card-box-title">Pemesanan WhatsApp Toko</h2>
+                <span class="card-box-sub">Nomor resmi gerai yang dihubungi calon pembeli saat menekan tombol pesan pada katalog.</span>
+              </div>
+            </div>
+
+            <div class="wap-grid">
+              <div class="wap-field">
+                <label for="wa-in-field">Nomor WhatsApp Gerai ({activeSeller.nama_toko})</label>
+                <input 
+                  id="wa-in-field" 
+                  type="tel" 
+                  inputmode="numeric" 
+                  pattern="[0-9]*"
+                  placeholder="085738211550" 
+                  autocomplete="off" 
+                  bind:value={waInput}
+                  on:input={(e) => { waInput = e.target.value.replace(/\D/g, ''); }}
+                  on:keydown={(e) => {
+                    if (['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) || e.ctrlKey || e.metaKey) return;
+                    if (!/^\d$/.test(e.key)) e.preventDefault();
+                  }}
+                />
+                {#if waErr}
+                  <div class="err" role="alert">{waErr}</div>
+                {/if}
+              </div>
+              <div class="wap-info">
+                <span>Tautan Pemesanan Aktif:</span>
+                <a href="https://wa.me/{activeSeller.no_wa}" target="_blank" rel="noopener noreferrer" class="wa-link-preview">
+                  wa.me/{activeSeller.no_wa} ↗
+                </a>
+                <button class="btn" on:click={handleSaveSellerWa}>
+                  Simpan Perubahan Nomor
+                </button>
+              </div>
+            </div>
+          </div>
+        {/if}
+
+        {#if currentMenu === 'orders'}
+          <!-- ========================================================
+               TAB KHUSUS: PESANAN MASUK GERAI (EKSKLUSIF PER SELLER)
+               ======================================================== -->
+          <div class="welcome-banner-card order-banner">
+            <div class="banner-chinese-watermark" aria-hidden="true">
+              <span class="watermark-calligraphy" lang="zh">信守承诺 · 宾客至上 · 财源广进</span>
+            </div>
+            <div class="banner-text-col">
+              <span class="banner-greeting">Pesanan Masuk Gerai {activeSeller.nama_toko}</span>
+              <p class="banner-subtext">
+                Semua pesanan katalog pembeli yang memilih karya dari gerai Anda dialihkan ke sini secara terisolasi. Pantau status, verifikasi pembayaran via WhatsApp, dan selesaikan pesanan.
+              </p>
+            </div>
+            <div class="banner-avatar-col">
+              <div class="banner-portrait-seal">
+                <span class="seal-glyph" lang="zh">信</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4 Stat Cards Pesanan Gerai -->
+          <div class="stats-grid-row">
+            <div class="stat-card">
+              <span class="stat-watermark" lang="zh" aria-hidden="true">单</span>
+              <div class="stat-header">
+                <span class="stat-ico-badge" lang="zh">单</span>
+                <span class="stat-name">Total Pesanan</span>
+              </div>
+              <b class="stat-number">{sellerOrders.length}</b>
+              <span class="stat-footer-text">Pesanan masuk ke gerai ini</span>
+            </div>
+
+            <div class="stat-card">
+              <span class="stat-watermark" lang="zh" aria-hidden="true">待</span>
+              <div class="stat-header">
+                <span class="stat-ico-badge" lang="zh">待</span>
+                <span class="stat-name">Perlu Konfirmasi</span>
+              </div>
+              <b class="stat-number" style="color: var(--gold);">{pendingOrders.length}</b>
+              <span class="stat-footer-text">Menunggu tanggapan Anda</span>
+            </div>
+
+            <div class="stat-card">
+              <span class="stat-watermark" lang="zh" aria-hidden="true">制</span>
+              <div class="stat-header">
+                <span class="stat-ico-badge" lang="zh">制</span>
+                <span class="stat-name">Sedang Diproses</span>
+              </div>
+              <b class="stat-number" style="color: #64b5f6;">{processingOrders.length}</b>
+              <span class="stat-footer-text">Dalam pembuatan / packing</span>
+            </div>
+
+            <div class="stat-card">
+              <span class="stat-watermark" lang="zh" aria-hidden="true">金</span>
+              <div class="stat-header">
+                <span class="stat-ico-badge" lang="zh">金</span>
+                <span class="stat-name">Nilai Pesanan</span>
+              </div>
+              <b class="stat-number" style="font-size: 20px;">{rp(sellerOrdersRevenue)}</b>
+              <span class="stat-footer-text">{completedOrders.length} pesanan tuntas</span>
+            </div>
+          </div>
+
+          <!-- DAFTAR KARTU PESANAN GERAI -->
+          <div class="content-card-box">
+            <span class="card-corner-watermark" lang="zh" aria-hidden="true">信</span>
+            <div class="card-box-header">
+              <div>
+                <h2 class="card-box-title">Daftar Pesanan Masuk ({filteredSellerOrders.length})</h2>
+                <span class="card-box-sub">Pesanan yang hanya menjadi tanggung jawab gerai {activeSeller.nama_toko}.</span>
+              </div>
+            </div>
+
+            <!-- Filter Status Pesanan -->
+            <div class="order-filter-status-bar">
+              <button 
+                type="button" 
+                class="dash-cat-pill" 
+                class:active={orderFilterStatus === 'all'}
+                on:click={() => (orderFilterStatus = 'all')}
+              >
+                Semua ({sellerOrders.length})
+              </button>
+              <button 
+                type="button" 
+                class="dash-cat-pill" 
+                class:active={orderFilterStatus === 'Menunggu Konfirmasi'}
+                on:click={() => (orderFilterStatus = 'Menunggu Konfirmasi')}
+              >
+                Menunggu Konfirmasi ({pendingOrders.length})
+              </button>
+              <button 
+                type="button" 
+                class="dash-cat-pill" 
+                class:active={orderFilterStatus === 'Diproses'}
+                on:click={() => (orderFilterStatus = 'Diproses')}
+              >
+                Diproses ({processingOrders.length})
+              </button>
+              <button 
+                type="button" 
+                class="dash-cat-pill" 
+                class:active={orderFilterStatus === 'Selesai'}
+                on:click={() => (orderFilterStatus = 'Selesai')}
+              >
+                Selesai ({completedOrders.length})
+              </button>
+            </div>
+
+            {#if filteredSellerOrders.length === 0}
+              <div class="empty-orders-banner">
+                <span class="empty-order-seal" lang="zh">空</span>
+                <p>Tidak ada pesanan dengan status "{orderFilterStatus}" untuk gerai {activeSeller.nama_toko}.</p>
+              </div>
+            {:else}
+              <div class="orders-cards-stack">
+                {#each filteredSellerOrders as o (o.id)}
+                  <div class="order-detail-card">
+                    <!-- Order Top Row -->
+                    <div class="order-card-top">
+                      <div class="order-id-group">
+                        <span class="order-seal-icon" lang="zh">单</span>
+                        <div>
+                          <b class="order-id-code">#{o.id}</b>
+                          <span class="order-timestamp">{o.created_at}</span>
+                        </div>
+                      </div>
+                      <span class="order-badge {o.status === 'Menunggu Konfirmasi' ? 'pending' : o.status === 'Diproses' ? 'process' : o.status === 'Selesai' ? 'done' : 'cancel'}">
+                        {o.status}
+                      </span>
+                    </div>
+
+                    <!-- Customer Info Box -->
+                    <div class="order-buyer-box">
+                      <div class="buyer-info-col">
+                        <div class="buyer-meta">
+                          <span class="buyer-label">Pembeli:</span>
+                          <b class="buyer-name-text">{o.buyer_name}</b>
+                          {#if o.buyer_email}
+                            <span class="buyer-email-text">({o.buyer_email})</span>
+                          {/if}
+                        </div>
+                        {#if o.note}
+                          <div class="buyer-note-wrap">
+                            <span class="note-label">Catatan Pembeli:</span>
+                            <span class="note-quote">"{o.note}"</span>
+                          </div>
+                        {/if}
+                      </div>
+
+                      <div class="buyer-action-col">
+                        {#if o.buyer_wa}
+                          <button 
+                            type="button" 
+                            class="buyer-wa-btn" 
+                            on:click={() => handleContactBuyerWa(o)}
+                            title="Hubungi Pembeli via WhatsApp"
+                          >
+                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                            </svg>
+                            <span>Hubungi +{o.buyer_wa}</span>
+                          </button>
+                        {/if}
+                      </div>
+                    </div>
+
+                    <!-- Ordered Items List -->
+                    <div class="order-items-wrapper">
+                      <div class="items-mini-list">
+                        {#each o.items as it}
+                          <div class="item-mini-row">
+                            <div class="item-mini-info">
+                              <span class="item-bullet">❖</span>
+                              <span class="item-name-bold">{it.nama}</span>
+                              <span class="item-qty-tag">x{it.qty} unit</span>
+                            </div>
+                            <span class="item-subtotal-price">{rp((Number(it.harga) || 0) * (Number(it.qty) || 1))}</span>
+                          </div>
+                        {/each}
+                      </div>
+                    </div>
+
+                    <!-- Order Card Bottom Actions -->
+                    <div class="order-card-footer">
+                      <div class="order-total-display">
+                        <span>Total Pesanan:</span>
+                        <b class="gold-price-total">{rp(o.total)}</b>
+                      </div>
+
+                      <div class="order-action-buttons">
+                        {#if o.status === 'Menunggu Konfirmasi'}
+                          <button 
+                            type="button" 
+                            class="order-act-btn btn-confirm" 
+                            on:click={() => handleConfirmOrder(o)}
+                          >
+                            Konfirmasi & Proses
+                          </button>
+                        {:else if o.status === 'Diproses'}
+                          <button 
+                            type="button" 
+                            class="order-act-btn btn-complete" 
+                            on:click={() => handleCompleteOrder(o)}
+                          >
+                            Tandai Selesai & Terkirim
+                          </button>
+                        {/if}
+
+                        {#if o.status !== 'Selesai' && o.status !== 'Dibatalkan'}
+                          <button 
+                            type="button" 
+                            class="order-act-btn btn-cancel" 
+                            on:click={() => handleCancelOrder(o)}
+                          >
+                            Batalkan
+                          </button>
+                        {/if}
+                      </div>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
+
+        {#if currentMenu === 'products'}
+          <!-- ==================== TAB KELOLA KARYA & STOK ==================== -->
+          <div class="content-card-box">
+            <span class="card-corner-watermark" lang="zh" aria-hidden="true">尚韵</span>
+            <div class="card-box-header">
+              <div>
+                <h2 class="card-box-title">Kelola Karya & Stok Gerai ({sellerProducts.length})</h2>
+                <span class="card-box-sub">Koleksi kriya yang sedang aktif ditampilkan di gerai {activeSeller.nama_toko}.</span>
+              </div>
+              <button class="btn sm" on:click={openAddModal}>
+                + Upload Karya Baru
+              </button>
+            </div>
+
+            {#if sellerCats.length > 0}
+              <div class="dash-category-filter-bar" aria-label="Filter kategori karya gerai">
+                <button 
+                  type="button" 
+                  class="dash-cat-pill" 
+                  class:active={sellerSelectedCategory === 'all'}
+                  on:click={() => (sellerSelectedCategory = 'all')}
+                >
+                  Semua ({sellerProducts.length})
+                </button>
+                {#each sellerCats as cat}
+                  {@const catCount = sellerProducts.filter(p => p.kategori === cat).length}
+                  <button 
+                    type="button" 
+                    class="dash-cat-pill" 
+                    class:active={sellerSelectedCategory === cat}
+                    on:click={() => (sellerSelectedCategory = cat)}
+                  >
+                    {cat} ({catCount})
+                  </button>
+                {/each}
+              </div>
+            {/if}
+
+            <div class="tw">
+              <table>
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Nama Karya</th>
+                    <th>Kategori</th>
+                    <th>Harga</th>
+                    <th>Stok</th>
+                    <th>Unggulan</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#if filteredSellerProducts.length === 0}
+                    <tr>
+                      <td colspan="7" class="empty-cell">
+                        {sellerProducts.length === 0 
+                          ? 'Belum ada karya yang diunggah untuk gerai ini. Pilih "+ Upload Karya Baru" untuk mulai menambahkan.' 
+                          : 'Tidak ada karya dalam kategori ini.'}
+                      </td>
+                    </tr>
+                  {:else}
+                    {#each filteredSellerProducts as p (p.id)}
+                      <tr>
+                        <td>
+                          <img 
+                            class="th" 
+                            data-id={p.id} 
+                            src={img(p)} 
+                            alt="" 
+                            on:error={(e) => handleImgError(e, p)}
+                          />
+                        </td>
+                        <td class="nm">{p.nama}</td>
+                        <td><span class="cat-pill">{p.kategori}</span></td>
+                        <td class="pr">{rp(p.harga)}</td>
+                        <td>
+                          {#if p.stok < 1}
+                            <span class="st out" style="margin:0">Habis</span>
+                          {:else}
+                            <b>{p.stok} unit</b>
+                          {/if}
+                        </td>
+                        <td>
+                          {#if p.unggulan}
+                            <span class="mini" title="Karya Unggulan">珍</span>
+                          {/if}
+                        </td>
+                        <td class="act">
+                          <button class="lk" on:click={() => openEditModal(p.id)}>Ubah</button>
+                          <button class="lk del" on:click={() => handleDeleteClick(p.id)}>
+                            {$delConfirmId === p.id ? 'Yakin hapus?' : 'Hapus'}
+                          </button>
+                        </td>
+                      </tr>
+                    {/each}
+                  {/if}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {/if}
+
+        {#if currentMenu === 'wa'}
+          <!-- ==================== TAB PENGATURAN WHATSAPP ==================== -->
+          <div class="content-card-box">
+            <span class="card-corner-watermark" lang="zh" aria-hidden="true">信</span>
+            <div class="card-box-header">
+              <div>
+                <h2 class="card-box-title">Pemesanan WhatsApp Toko</h2>
+                <span class="card-box-sub">Nomor resmi gerai yang dihubungi calon pembeli saat menekan tombol pesan pada katalog.</span>
+              </div>
+            </div>
+
+            <div class="wap-grid">
+              <div class="wap-field">
+                <label for="wa-in-field">Nomor WhatsApp Gerai ({activeSeller.nama_toko})</label>
+                <input 
+                  id="wa-in-field" 
+                  type="tel" 
+                  inputmode="numeric" 
+                  pattern="[0-9]*"
+                  placeholder="085738211550" 
+                  autocomplete="off" 
+                  bind:value={waInput}
+                  on:input={(e) => { waInput = e.target.value.replace(/\D/g, ''); }}
+                  on:keydown={(e) => {
+                    if (['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) || e.ctrlKey || e.metaKey) return;
+                    if (!/^\d$/.test(e.key)) e.preventDefault();
+                  }}
+                />
+                {#if waErr}
+                  <div class="err" role="alert">{waErr}</div>
+                {/if}
+              </div>
+              <div class="wap-info">
+                <span>Tautan Pemesanan Aktif:</span>
+                <a href="https://wa.me/{activeSeller.no_wa}" target="_blank" rel="noopener noreferrer" class="wa-link-preview">
+                  wa.me/{activeSeller.no_wa} ↗
+                </a>
+                <button class="btn" on:click={handleSaveSellerWa}>
+                  Simpan Perubahan Nomor
+                </button>
+              </div>
+            </div>
+          </div>
+        {/if}
+
       {/if}
     </main>
   </div>
@@ -1548,6 +2235,434 @@
     font-size: 13.5px;
     color: var(--gold);
     text-decoration: underline;
+  }
+
+  /* ========================================================
+     MENU BADGE & ORDER BADGES
+     ======================================================== */
+  .menu-badge-pill {
+    background: var(--red);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 10px;
+    margin-left: auto;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
+
+  .order-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .order-badge.pending {
+    background: rgba(224, 181, 98, 0.15);
+    border: 1px solid rgba(224, 181, 98, 0.4);
+    color: var(--gold);
+  }
+
+  .order-badge.process {
+    background: rgba(100, 181, 246, 0.15);
+    border: 1px solid rgba(100, 181, 246, 0.4);
+    color: #64b5f6;
+  }
+
+  .order-badge.done {
+    background: rgba(76, 175, 80, 0.15);
+    border: 1px solid rgba(76, 175, 80, 0.4);
+    color: #81c784;
+  }
+
+  .order-badge.cancel {
+    background: rgba(244, 67, 54, 0.15);
+    border: 1px solid rgba(244, 67, 54, 0.4);
+    color: #e57373;
+  }
+
+  /* ========================================================
+     ADMIN VIEW ENHANCEMENTS
+     ======================================================== */
+  .admin-banner {
+    background: linear-gradient(135deg, rgba(38, 18, 14, 0.95) 0%, rgba(18, 8, 6, 0.98) 100%);
+    border-color: rgba(224, 181, 98, 0.4);
+  }
+
+  .admin-seller-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .admin-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--card-stat-border);
+    padding: 8px 14px;
+    border-radius: 12px;
+    flex: 1;
+    min-width: 260px;
+  }
+
+  .admin-search-wrap svg {
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .admin-search-wrap input {
+    background: none;
+    border: none;
+    color: var(--white);
+    font-size: 13.5px;
+    width: 100%;
+    outline: none;
+    font-family: inherit;
+  }
+
+  .admin-spec-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .seller-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .seller-mini-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(224, 181, 98, 0.18);
+    color: var(--gold);
+    border: 1px solid rgba(224, 181, 98, 0.4);
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 13px;
+  }
+
+  .seller-wa-link {
+    color: #25d366;
+    text-decoration: none;
+    font-weight: 500;
+    transition: opacity 0.2s;
+  }
+  .seller-wa-link:hover {
+    text-decoration: underline;
+    opacity: 0.85;
+  }
+
+  .st-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .st-badge.active {
+    background: rgba(76, 175, 80, 0.12);
+    color: #81c784;
+    border: 1px solid rgba(76, 175, 80, 0.3);
+  }
+
+  .st-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #81c784;
+  }
+
+  /* ========================================================
+     ORDERS VIEW (PESANAN MASUK PER SELLER)
+     ======================================================== */
+  .order-banner {
+    background: linear-gradient(135deg, rgba(28, 14, 12, 0.95) 0%, rgba(14, 7, 5, 0.98) 100%);
+    border-color: rgba(224, 181, 98, 0.3);
+  }
+
+  .order-filter-status-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .empty-orders-banner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 16px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .empty-order-seal {
+    font: 400 48px "Ma Shan Zheng", serif;
+    color: var(--gold);
+    opacity: 0.4;
+    margin-bottom: 12px;
+  }
+
+  .orders-cards-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .order-detail-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--card-stat-border);
+    border-radius: 16px;
+    padding: 20px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .order-detail-card:hover {
+    border-color: rgba(224, 181, 98, 0.35);
+  }
+
+  .order-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 14px;
+  }
+
+  .order-id-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .order-seal-icon {
+    width: 32px;
+    height: 32px;
+    background: var(--red);
+    color: #ffffff;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    font: 400 16px "Ma Shan Zheng", serif;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  }
+
+  .order-id-code {
+    font-family: monospace;
+    font-size: 16px;
+    color: var(--gold);
+    letter-spacing: 0.04em;
+    display: block;
+  }
+
+  .order-timestamp {
+    font-size: 12px;
+    color: var(--muted);
+    display: block;
+  }
+
+  .order-buyer-box {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(224, 181, 98, 0.1);
+    padding: 12px 16px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+  }
+
+  .buyer-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    flex-wrap: wrap;
+  }
+
+  .buyer-label {
+    color: var(--muted);
+  }
+
+  .buyer-name-text {
+    color: var(--white);
+  }
+
+  .buyer-email-text {
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+
+  .buyer-note-wrap {
+    margin-top: 6px;
+    font-size: 13px;
+  }
+
+  .note-label {
+    color: var(--gold);
+    font-weight: 500;
+  }
+
+  .note-quote {
+    color: #d1c5b8;
+    font-style: italic;
+  }
+
+  .buyer-wa-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(37, 211, 102, 0.14);
+    border: 1px solid rgba(37, 211, 102, 0.45);
+    color: #25d366;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+  }
+
+  .buyer-wa-btn:hover {
+    background: #25d366;
+    color: #ffffff;
+  }
+
+  .order-items-wrapper {
+    padding: 6px 0 16px;
+    border-bottom: 1px dashed var(--line);
+  }
+
+  .items-mini-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .item-mini-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13.5px;
+  }
+
+  .item-mini-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .item-bullet {
+    color: var(--gold);
+    font-size: 11px;
+  }
+
+  .item-name-bold {
+    font-weight: 500;
+    color: var(--white);
+  }
+
+  .item-qty-tag {
+    color: var(--gold);
+    font-size: 12px;
+    background: rgba(224, 181, 98, 0.1);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  .item-subtotal-price {
+    font-weight: 600;
+    color: var(--white);
+    font-family: inherit;
+  }
+
+  .order-card-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-top: 14px;
+  }
+
+  .order-total-display {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 14px;
+  }
+
+  .gold-price-total {
+    font: 600 20px "Cormorant Garamond", serif;
+    color: var(--gold);
+  }
+
+  .order-action-buttons {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .order-act-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+  }
+
+  .order-act-btn.btn-confirm {
+    background: var(--gold);
+    color: #120705;
+    border: 1px solid var(--gold);
+  }
+  .order-act-btn.btn-confirm:hover {
+    background: #f0c978;
+  }
+
+  .order-act-btn.btn-complete {
+    background: #2e7d32;
+    color: #ffffff;
+    border: 1px solid #2e7d32;
+  }
+  .order-act-btn.btn-complete:hover {
+    background: #388e3c;
+  }
+
+  .order-act-btn.btn-cancel {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--card-stat-border);
+  }
+  .order-act-btn.btn-cancel:hover {
+    color: #e57373;
+    border-color: #e57373;
   }
 
   /* RESPONSIVE */

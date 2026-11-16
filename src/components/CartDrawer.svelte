@@ -1,5 +1,5 @@
 <script>
-  import { cart, cartOpen, cartCount, cartTotal, authUser, showToast } from '../stores/store.js';
+  import { cart, cartOpen, cartCount, cartTotal, authUser, showToast, orders, sellers } from '../stores/store.js';
   import { img, ph, rp } from '../data/seed.js';
 
   let hasAnimatedBounce = false;
@@ -33,34 +33,90 @@
     }
   }
 
-  function handleCheckoutWhatsApp() {
-    if ($cart.length === 0) return;
+  // Group cart items strictly by seller atelier
+  $: groupedCart = $cart.reduce((groups, item) => {
+    const sId = item.seller_id || 's1';
+    if (!groups[sId]) {
+      const foundSeller = $sellers.find((s) => s.id === sId);
+      groups[sId] = {
+        seller_id: sId,
+        seller_toko: item.seller_toko || foundSeller?.nama_toko || 'Zhao Atelier Suzhou',
+        seller_wa: item.seller_wa || foundSeller?.no_wa || '6285738211550',
+        items: [],
+        total: 0,
+        count: 0
+      };
+    }
+    groups[sId].items.push(item);
+    groups[sId].total += (Number(item.harga) || 0) * (Number(item.qty) || 0);
+    groups[sId].count += (Number(item.qty) || 0);
+    return groups;
+  }, {});
+
+  $: sellerGroups = Object.values(groupedCart);
+
+  // Checkout specific seller group
+  function handleCheckoutGroup(group) {
+    if (!group || !group.items || group.items.length === 0) return;
 
     const buyerName = $authUser?.name ? $authUser.name : 'Sahabat Shang Yun';
-    const firstSellerWa = $cart[0]?.seller_wa || '6285738211550';
+    const buyerWa = $authUser?.no_wa || $authUser?.wa || '';
+    const buyerEmail = $authUser?.email || '';
 
-    // Format list of items
-    const lines = $cart.map((item, idx) => {
-      const tokoName = item.seller_toko ? ` [${item.seller_toko}]` : '';
-      return `${idx + 1}. ${item.nama} (${item.qty} unit) — ${rp(item.harga * item.qty)}${tokoName}`;
+    // Record the order into orders store strictly for this seller_id
+    const newOrder = orders.addOrder({
+      seller_id: group.seller_id,
+      seller_toko: group.seller_toko,
+      buyer_name: buyerName,
+      buyer_wa: buyerWa,
+      buyer_email: buyerEmail,
+      items: group.items.map((i) => ({
+        id: i.id,
+        nama: i.nama,
+        kategori: i.kategori,
+        harga: i.harga,
+        qty: i.qty,
+        subtotal: i.harga * i.qty,
+        imageUrl: i.imageUrl
+      })),
+      total: group.total,
+      status: 'Menunggu Konfirmasi',
+      note: `Pesanan dibuat via keranjang belanja untuk gerai ${group.seller_toko}.`
+    });
+
+    // Format list of items for WhatsApp message
+    const lines = group.items.map((item, idx) => {
+      return `${idx + 1}. ${item.nama} (${item.qty} unit) — ${rp(item.harga * item.qty)}`;
     }).join('\n');
 
     const message = 
-`Halo Shang Yun, saya ${buyerName} ingin memesan karya kriya Imlek dari keranjang:
+`Halo ${group.seller_toko}, saya ${buyerName} ingin memesan karya kriya Imlek dari katalog Shang Yun:
 
 ${lines}
 
 ━━━━━━━━━━━━━━━━━━━
-Total Pesanan: ${rp($cartTotal)} (${$cartCount} unit karya)
+Total Pesanan: ${rp(group.total)} (${group.count} unit karya)
+No. Pesanan: #${newOrder.id}
 ━━━━━━━━━━━━━━━━━━━
 
 Mohon konfirmasi ketersediaan stok gerai dan estimasi biaya pengiriman. Terima kasih!`;
 
     const encoded = encodeURIComponent(message);
-    const waUrl = `https://wa.me/${firstSellerWa}?text=${encoded}`;
+    const waUrl = `https://wa.me/${group.seller_wa}?text=${encoded}`;
 
-    showToast('Membuka WhatsApp untuk mengirim rincian pesanan...');
+    // Remove checked out items from cart
+    group.items.forEach((item) => {
+      cart.removeItem(item.id);
+    });
+
+    showToast(`Pesanan #${newOrder.id} tercatat di sistem & dialihkan ke WhatsApp ${group.seller_toko}!`);
     window.open(waUrl, '_blank', 'noopener,noreferrer');
+  }
+
+  function handleCheckoutAll() {
+    if (sellerGroups.length === 0) return;
+    // Checkout first group
+    handleCheckoutGroup(sellerGroups[0]);
   }
 </script>
 
@@ -152,69 +208,94 @@ Mohon konfirmasi ketersediaan stok gerai dan estimasi biaya pengiriman. Terima k
           </button>
         </div>
       {:else}
-        <div class="cart-items-list">
-          {#each $cart as item (item.id)}
-            <div class="cart-item-card">
-              <div class="item-thumb-wrap">
-                <img 
-                  class="item-img" 
-                  src={img(item)} 
-                  alt={item.nama}
-                  on:error={(e) => handleImgError(e, item)}
-                />
+        {#each sellerGroups as group (group.seller_id)}
+          <div class="atelier-cart-group">
+            <div class="atelier-group-header">
+              <div class="atelier-info">
+                <span class="atelier-seal-mini" lang="zh">店</span>
+                <span class="atelier-title-text">{group.seller_toko}</span>
               </div>
+              <span class="atelier-count-badge">{group.count} karya · {rp(group.total)}</span>
+            </div>
 
-              <div class="item-details">
-                <div class="item-head">
-                  <h3 class="item-name">{item.nama}</h3>
-                  <button 
-                    type="button" 
-                    class="item-del-btn" 
-                    on:click={() => cart.removeItem(item.id)}
-                    title="Hapus karya dari keranjang"
-                    aria-label="Hapus {item.nama}"
-                  >
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                  </button>
-                </div>
-
-                <span class="item-seller">{item.seller_toko}</span>
-                <span class="item-price-unit">{rp(item.harga)} / unit</span>
-
-                <!-- Stepper Kuantitas & Subtotal Item -->
-                <div class="item-bottom-row">
-                  <div class="stepper-wrap">
-                    <button 
-                      type="button" 
-                      class="step-btn" 
-                      on:click={() => cart.updateQty(item.id, item.qty - 1)}
-                      title="Kurangi jumlah"
-                      aria-label="Kurangi jumlah"
-                    >
-                      &minus;
-                    </button>
-                    <span class="qty-display">{item.qty}</span>
-                    <button 
-                      type="button" 
-                      class="step-btn" 
-                      disabled={item.qty >= item.maxStock}
-                      on:click={() => cart.updateQty(item.id, item.qty + 1)}
-                      title={item.qty >= item.maxStock ? 'Maksimal stok tercapai' : 'Tambah jumlah'}
-                      aria-label="Tambah jumlah"
-                    >
-                      &#43;
-                    </button>
+            <div class="cart-items-list">
+              {#each group.items as item (item.id)}
+                <div class="cart-item-card">
+                  <div class="item-thumb-wrap">
+                    <img 
+                      class="item-img" 
+                      src={img(item)} 
+                      alt={item.nama}
+                      on:error={(e) => handleImgError(e, item)}
+                    />
                   </div>
 
-                  <b class="item-subtotal">{rp(item.harga * item.qty)}</b>
+                  <div class="item-details">
+                    <div class="item-head">
+                      <h3 class="item-name">{item.nama}</h3>
+                      <button 
+                        type="button" 
+                        class="item-del-btn" 
+                        on:click={() => cart.removeItem(item.id)}
+                        title="Hapus karya dari keranjang"
+                        aria-label="Hapus {item.nama}"
+                      >
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                      </button>
+                    </div>
+
+                    <span class="item-seller">{group.seller_toko}</span>
+                    <span class="item-price-unit">{rp(item.harga)} / unit</span>
+
+                    <!-- Stepper Kuantitas & Subtotal Item -->
+                    <div class="item-bottom-row">
+                      <div class="stepper-wrap">
+                        <button 
+                          type="button" 
+                          class="step-btn" 
+                          on:click={() => cart.updateQty(item.id, item.qty - 1)}
+                          title="Kurangi jumlah"
+                          aria-label="Kurangi jumlah"
+                        >
+                          &minus;
+                        </button>
+                        <span class="qty-display">{item.qty}</span>
+                        <button 
+                          type="button" 
+                          class="step-btn" 
+                          disabled={item.qty >= item.maxStock}
+                          on:click={() => cart.updateQty(item.id, item.qty + 1)}
+                          title={item.qty >= item.maxStock ? 'Maksimal stok tercapai' : 'Tambah jumlah'}
+                          aria-label="Tambah jumlah"
+                        >
+                          &#43;
+                        </button>
+                      </div>
+
+                      <b class="item-subtotal">{rp(item.harga * item.qty)}</b>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              {/each}
             </div>
-          {/each}
-        </div>
+
+            {#if sellerGroups.length > 1}
+              <button 
+                type="button" 
+                class="checkout-atelier-btn" 
+                on:click={() => handleCheckoutGroup(group)}
+              >
+                <svg class="wa-btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                </svg>
+                <span>Pesan ke {group.seller_toko} via WhatsApp</span>
+              </button>
+            {/if}
+          </div>
+        {/each}
       {/if}
     </div>
 
@@ -224,7 +305,7 @@ Mohon konfirmasi ketersediaan stok gerai dan estimasi biaya pengiriman. Terima k
         <div class="summary-breakdown">
           <div class="summary-line">
             <span>Total Item:</span>
-            <b>{$cartCount} unit karya</b>
+            <b>{$cartCount} unit karya ({sellerGroups.length} gerai)</b>
           </div>
           <div class="summary-line grand-total">
             <span>Estimasi Total:</span>
@@ -232,20 +313,30 @@ Mohon konfirmasi ketersediaan stok gerai dan estimasi biaya pengiriman. Terima k
           </div>
         </div>
 
-        <p class="wa-checkout-note">
-          Rincian pesanan akan dikirimkan langsung ke WhatsApp gerai resmi untuk konfirmasi ketersediaan dan kemasan Imlek eksklusif.
-        </p>
+        {#if sellerGroups.length > 1}
+          <p class="wa-checkout-note">
+            Karya berasal dari <b>{sellerGroups.length} gerai perajin berbeda</b>. Anda dapat memesan langsung ke masing-masing gerai melalui tombol di atas, atau klik tombol di bawah untuk memesan gerai pertama.
+          </p>
+        {:else}
+          <p class="wa-checkout-note">
+            Pesanan akan dikirim langsung ke WhatsApp gerai resmi <b>{sellerGroups[0]?.seller_toko}</b> untuk konfirmasi ketersediaan dan kemasan Imlek eksklusif.
+          </p>
+        {/if}
 
         <div class="footer-actions">
           <button 
             type="button" 
             class="checkout-wa-btn" 
-            on:click={handleCheckoutWhatsApp}
+            on:click={handleCheckoutAll}
           >
             <svg class="wa-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
             </svg>
-            <span>Pesan Sekarang via WhatsApp</span>
+            <span>
+              {sellerGroups.length > 1 
+                ? `Pesan ke ${sellerGroups[0]?.seller_toko} via WhatsApp` 
+                : 'Pesan Sekarang via WhatsApp'}
+            </span>
           </button>
 
           <div class="footer-sub-links">
@@ -511,6 +602,82 @@ Mohon konfirmasi ketersediaan stok gerai dan estimasi biaya pengiriman. Terima k
 
   .btn-browse:hover {
     background: var(--brass);
+    color: #ffffff;
+  }
+
+  /* ATELIER CART GROUPS */
+  .atelier-cart-group {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--card-stat-border);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+
+  .atelier-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 12px;
+    margin-bottom: 14px;
+    border-bottom: 1px dashed var(--line);
+  }
+
+  .atelier-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .atelier-seal-mini {
+    width: 22px;
+    height: 22px;
+    background: var(--red);
+    color: #ffffff;
+    border-radius: 4px;
+    display: grid;
+    place-items: center;
+    font: 400 12px 'Ma Shan Zheng', serif;
+    line-height: 1;
+  }
+
+  .atelier-title-text {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--white);
+    letter-spacing: 0.02em;
+  }
+
+  .atelier-count-badge {
+    font-size: 12px;
+    color: var(--gold);
+    background: rgba(212, 175, 55, 0.12);
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+
+  .checkout-atelier-btn {
+    width: 100%;
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(37, 211, 102, 0.12);
+    border: 1px solid rgba(37, 211, 102, 0.4);
+    color: #25d366;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+  }
+
+  .checkout-atelier-btn:hover {
+    background: #25d366;
     color: #ffffff;
   }
 

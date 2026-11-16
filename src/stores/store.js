@@ -391,15 +391,24 @@ function createCartStore() {
             return item;
           });
         } else {
+          let sId = product.seller_id || 's1';
+          let sToko = product.seller_toko;
+          let sWa = product.seller_wa;
+          if (!sToko || !sWa) {
+            const foundSeller = DEFAULT_SELLERS.find((s) => s.id === sId) || DEFAULT_SELLERS[0];
+            sToko = sToko || foundSeller.nama_toko;
+            sWa = sWa || foundSeller.no_wa;
+          }
+
           const item = {
             id: product.id,
             nama: product.nama,
             kategori: product.kategori,
             harga: Number(product.harga) || 0,
             imageUrl: product.imageUrl || product.image_url,
-            seller_id: product.seller_id,
-            seller_toko: product.seller_toko || 'Zhao Atelier Suzhou',
-            seller_wa: product.seller_wa || '6285738211550',
+            seller_id: sId,
+            seller_toko: sToko,
+            seller_wa: sWa,
             maxStock: maxStock,
             qty: Math.min(qty, maxStock)
           };
@@ -452,3 +461,185 @@ export const cartCount = derived(cart, ($cart) =>
 export const cartTotal = derived(cart, ($cart) =>
   $cart.reduce((total, item) => total + (Number(item.harga) || 0) * (Number(item.qty) || 0), 0)
 );
+
+// ========================================================
+// ORDERS STORE (Pesanan Masuk Per Seller)
+// - Persistent orders per seller in localStorage
+// - Orders route exclusively to each respective seller
+// ========================================================
+export const ORDERS_STORAGE_KEY = 'shangyun.orders.v1';
+
+export const INITIAL_ORDERS = [
+  {
+    id: 'ORD-2026-081',
+    seller_id: 's1',
+    seller_toko: 'Zhao Atelier Suzhou',
+    buyer_name: 'Jessica Kusuma',
+    buyer_wa: '6281298765432',
+    buyer_email: 'jessica.kusuma@gmail.com',
+    items: [
+      {
+        id: 'p1',
+        nama: 'Lampion Sutra Emas',
+        kategori: 'Dekorasi',
+        harga: 450000,
+        qty: 2,
+        subtotal: 900000
+      }
+    ],
+    total: 900000,
+    status: 'Menunggu Konfirmasi',
+    created_at: '16 Feb 2026, 10:15 WIB',
+    note: 'Mohon kemasan kotak merah pita emas untuk kado mertua Imlek.'
+  },
+  {
+    id: 'ORD-2026-074',
+    seller_id: 's1',
+    seller_toko: 'Zhao Atelier Suzhou',
+    buyer_name: 'Hendro Wijaya',
+    buyer_wa: '6281355443322',
+    buyer_email: 'hendro.w@gmail.com',
+    items: [
+      {
+        id: 'p4',
+        nama: 'Gantungan Simpul Keberuntungan',
+        kategori: 'Aksesori',
+        harga: 95000,
+        qty: 4,
+        subtotal: 380000
+      }
+    ],
+    total: 380000,
+    status: 'Diproses',
+    created_at: '15 Feb 2026, 16:40 WIB',
+    note: 'Pembayaran sudah dikonfirmasi via transfer WhatsApp.'
+  },
+  {
+    id: 'ORD-2026-079',
+    seller_id: 's2',
+    seller_toko: 'Mei Cinnabar Workshop',
+    buyer_name: 'Fanny Gunawan',
+    buyer_wa: '6281877665544',
+    buyer_email: 'fanny.g@gmail.com',
+    items: [
+      {
+        id: 'p2',
+        nama: 'Angpao Sutra Bordir (isi 10)',
+        kategori: 'Angpao',
+        harga: 185000,
+        qty: 3,
+        subtotal: 555000
+      }
+    ],
+    total: 555000,
+    status: 'Menunggu Konfirmasi',
+    created_at: '16 Feb 2026, 09:30 WIB',
+    note: 'Kirim via kurir instant ke Pantai Indah Kapuk.'
+  },
+  {
+    id: 'ORD-2026-068',
+    seller_id: 's3',
+    seller_toko: 'Jinlong Jade & Porcelain',
+    buyer_name: 'Tan William',
+    buyer_wa: '6281700998877',
+    buyer_email: 'william.tan@gmail.com',
+    items: [
+      {
+        id: 'p3',
+        nama: 'Hampers Imlek Prestige',
+        kategori: 'Hampers',
+        harga: 1250000,
+        qty: 1,
+        subtotal: 1250000
+      }
+    ],
+    total: 1250000,
+    status: 'Diproses',
+    created_at: '14 Feb 2026, 13:20 WIB',
+    note: 'Harap sertakan amplop kartu ucapan Imlek tulisan Gong Xi Fa Cai.'
+  }
+];
+
+function createOrdersStore() {
+  let initial = [...INITIAL_ORDERS];
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem(ORDERS_STORAGE_KEY);
+      if (saved) {
+        initial = JSON.parse(saved);
+      } else {
+        localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(INITIAL_ORDERS));
+      }
+    } catch (e) {}
+  }
+
+  const { subscribe, set, update } = writable(initial);
+
+  function save(list) {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(list));
+      } catch (e) {}
+    }
+  }
+
+  return {
+    subscribe,
+    addOrder: (orderData) => {
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      });
+      const timeStr = now.toLocaleTimeString('id-ID', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      const orderId = `ORD-2026-${Math.floor(100 + Math.random() * 900)}`;
+
+      const newOrder = {
+        id: orderId,
+        seller_id: orderData.seller_id || 's1',
+        seller_toko: orderData.seller_toko || 'Zhao Atelier Suzhou',
+        buyer_name: orderData.buyer_name || 'Pelanggan Shang Yun',
+        buyer_wa: orderData.buyer_wa || '',
+        buyer_email: orderData.buyer_email || '',
+        items: orderData.items || [],
+        total: Number(orderData.total) || 0,
+        status: orderData.status || 'Menunggu Konfirmasi',
+        created_at: `${dateStr}, ${timeStr} WIB`,
+        note: orderData.note || 'Pesanan melalui keranjang katalog Shang Yun.'
+      };
+
+      update((list) => {
+        const next = [newOrder, ...list];
+        save(next);
+        return next;
+      });
+
+      return newOrder;
+    },
+    updateStatus: (orderId, newStatus) => {
+      update((list) => {
+        const next = list.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o));
+        save(next);
+        return next;
+      });
+    },
+    removeOrder: (orderId) => {
+      update((list) => {
+        const next = list.filter((o) => o.id !== orderId);
+        save(next);
+        return next;
+      });
+    },
+    reset: () => {
+      set([...INITIAL_ORDERS]);
+      save(INITIAL_ORDERS);
+    }
+  };
+}
+
+export const orders = createOrdersStore();
+
