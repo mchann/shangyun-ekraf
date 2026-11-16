@@ -1,0 +1,61 @@
+# `.agents/` is the product here, not local tooling.
+# Many developers globally ignore `**/.agents/` to keep agent config out of repos.
+# This negation overrides that, so the rules actually get committed.
+!.agents/
+
+# Dependencies and build output — monorepo, so match at any depth.
+node_modules/
+dist/
+out/
+.astro/
+*.vsix
+
+# Cloudflare / Wrangler local state
+.wrangler/
+.dev.vars
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Cloudinary credentials (never in repo)
+cloudinary.config.js
+
+# GitHub webhook secrets (in env only)
+# GITHUB_WEBHOOK_SECRET lives in wrangler.toml [env] section
+
+# Local development
+.devmemory.json
+.DS_Store
+*.log
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# OS temp files
+Thumbs.db
+.DS_Store
+
+# Database dumps and backups
+*.dump
+*.sql
+!apps/web/src/db/migrations/*.sql
+backups/
+
+# Neon local development (if using local Postgres)
+postgres_data/
+
+# Exported preview HTML
+Shang Yun *.html
