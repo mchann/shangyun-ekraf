@@ -74,6 +74,7 @@
   let otpError = '';
   let resendTimer = 60;
   let countdownInterval = null;
+  let isSendingOtp = false;
 
   // Validation & feedback state
   let errors = {};
@@ -227,10 +228,11 @@
   }
 
   // --- OTP WORKFLOW ---
-  function startOtpFlow(e) {
+  async function startOtpFlow(e) {
     e.preventDefault();
     if (!validateRegisterStep1()) return;
 
+    isSendingOtp = true;
     // Generate 6-digit lucky OTP
     generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
     otpDigits = ['', '', '', '', '', ''];
@@ -240,12 +242,34 @@
     startCountdown();
     regStep = 2;
 
-    showToast(`Kode OTP verifikasi dikirim ke ${regEmail}.`);
+    showToast(`Mengirim kode OTP ke ${regEmail}...`);
 
-    setTimeout(() => {
-      const firstInput = document.getElementById('otp-0');
-      if (firstInput) firstInput.focus();
-    }, 150);
+    try {
+      const res = await fetch('/api/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: regEmail.trim(),
+          otp: generatedOtp,
+          name: regName.trim(),
+          role: regType
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Gagal mengirim email OTP');
+      }
+      showToast(`Kode OTP verifikasi berhasil dikirim ke ${regEmail}! Periksa inbox/spam email Anda.`);
+    } catch (err) {
+      console.error('Send OTP error:', err);
+      showToast(`Perhatian: Gagal mengirim email OTP (${err.message}).`);
+    } finally {
+      isSendingOtp = false;
+      setTimeout(() => {
+        const firstInput = document.getElementById('otp-0');
+        if (firstInput) firstInput.focus();
+      }, 150);
+    }
   }
 
   function startCountdown() {
@@ -305,11 +329,36 @@
     if (lastBox) lastBox.focus();
   }
 
-  function resendOtp() {
+  async function resendOtp() {
+    if (resendTimer > 0 || isSendingOtp) return;
+    isSendingOtp = true;
     generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
     resendTimer = 60;
     startCountdown();
-    showToast(`Kode OTP baru telah dikirimkan ke ${regEmail}.`);
+    showToast(`Mengirim ulang kode OTP ke ${regEmail}...`);
+
+    try {
+      const res = await fetch('/api/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: regEmail.trim(),
+          otp: generatedOtp,
+          name: regName.trim(),
+          role: regType
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Gagal mengirim email');
+      }
+      showToast(`Kode OTP baru telah dikirimkan ke ${regEmail}.`);
+    } catch (err) {
+      console.error('Resend OTP error:', err);
+      showToast(`Gagal mengirim ulang OTP: ${err.message}`);
+    } finally {
+      isSendingOtp = false;
+    }
   }
 
   function verifyOtp() {
@@ -761,8 +810,8 @@
               {/if}
             </div>
 
-            <button class="go" type="submit">
-              Lanjut: Kirim Kode OTP Verifikasi &rarr;
+            <button class="go" type="submit" disabled={isSendingOtp}>
+              {isSendingOtp ? 'Mengirim Kode OTP...' : 'Lanjut: Kirim Kode OTP Verifikasi →'}
             </button>
 
             <p class="alt">
@@ -784,17 +833,21 @@
               </p>
             </div>
 
-            <!-- Hint Kode Demo untuk Mempermudah Pengujian Langsung -->
-            <div class="otp-demo-card">
-              <div class="otp-demo-header">
-                <span lang="zh">驗證碼</span>
-                <span>Kode OTP Anda (Demo):</span>
+            <!-- Notifikasi Pengiriman Email OTP Real -->
+            <div class="otp-mail-card">
+              <div class="otp-mail-header">
+                <span class="otp-mail-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="4" width="20" height="16" rx="2" />
+                    <path d="M22 7L12 13 2 7" />
+                  </svg>
+                </span>
+                <span>Email OTP Dikirim ke:</span>
+                <span lang="zh">驗證信</span>
               </div>
-              <div class="otp-demo-body">
-                <b class="otp-code-highlight">{generatedOtp}</b>
-                <button type="button" class="otp-autofill-btn" on:click={autoFillOtp}>
-                  Isi Otomatis
-                </button>
+              <div class="otp-mail-body">
+                <span class="otp-mail-addr">{regEmail}</span>
+                <span class="otp-mail-hint">Silakan periksa kotak masuk atau folder spam email Anda untuk menyalin 6-digit kode OTP keamanan.</span>
               </div>
             </div>
 
@@ -1208,60 +1261,54 @@
     line-height: 1.5;
   }
 
-  .otp-demo-card {
-    background: rgba(224, 181, 98, 0.08);
-    border: 1px dashed rgba(224, 181, 98, 0.35);
+  .otp-mail-card {
+    background: rgba(22, 9, 7, 0.75);
+    border: 1px solid rgba(224, 181, 98, 0.28);
     border-radius: 4px;
-    padding: 10px 14px;
-    margin-bottom: 18px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
+    padding: 12px 14px;
+    margin-bottom: 20px;
   }
 
-  .otp-demo-header {
+  .otp-mail-header {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: #cdb59c;
+    gap: 8px;
+    font-size: 11.5px;
+    color: #a8968a;
   }
 
-  .otp-demo-header span[lang="zh"] {
+  .otp-mail-icon {
+    display: flex;
+    align-items: center;
+    color: var(--gold, #e0b562);
+  }
+
+  .otp-mail-header span[lang="zh"] {
+    margin-left: auto;
     font-family: 'Ma Shan Zheng', serif;
-    font-size: 15px;
+    font-size: 13px;
     color: var(--gold, #e0b562);
   }
 
-  .otp-demo-body {
+  .otp-mail-body {
+    margin-top: 6px;
     display: flex;
-    align-items: center;
-    gap: 12px;
+    flex-direction: column;
+    gap: 4px;
   }
 
-  .otp-code-highlight {
-    font-family: monospace;
-    font-size: 20px;
-    letter-spacing: 0.15em;
-    color: var(--gold, #e0b562);
-  }
-
-  .otp-autofill-btn {
-    background: rgba(224, 181, 98, 0.2);
-    border: 1px solid var(--gold, #e0b562);
+  .otp-mail-addr {
+    font-size: 14px;
+    font-weight: 600;
     color: var(--paper, #f3e8d0);
-    font-size: 11px;
-    padding: 4px 10px;
-    border-radius: 3px;
-    cursor: pointer;
-    transition: all 0.2s ease;
+    letter-spacing: 0.02em;
+    word-break: break-all;
   }
 
-  .otp-autofill-btn:hover {
-    background: var(--gold, #e0b562);
-    color: #1a0806;
+  .otp-mail-hint {
+    font-size: 11.5px;
+    color: #9f8c7e;
+    line-height: 1.4;
   }
 
   /* 6-box OTP Grid */
