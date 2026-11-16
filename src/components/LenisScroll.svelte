@@ -1,14 +1,17 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import Lenis from 'lenis';
-  import { authModalOpen, dialogState, sellerModalOpen } from '../stores/store.js';
+  import { authModalOpen, dialogState, sellerModalOpen, activeTab } from '../stores/store.js';
 
   let lenisInstance = null;
   let rafId = null;
 
-  // Pause Lenis scrolling when any modal overlay is active
+  // Pause or destroy Lenis when on dashboard or when any modal overlay is active
   $: if (lenisInstance) {
-    if ($authModalOpen || $dialogState.open || $sellerModalOpen) {
+    if ($activeTab === 'dash' || (typeof window !== 'undefined' && window.location.pathname.startsWith('/dashboard'))) {
+      lenisInstance.destroy();
+      lenisInstance = null;
+    } else if ($authModalOpen || $dialogState.open || $sellerModalOpen) {
       lenisInstance.stop();
     } else {
       lenisInstance.start();
@@ -33,6 +36,11 @@
     // Check if user prefers reduced motion
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (prefersReducedMotion) return;
+
+    // Do NOT run Lenis on dashboard or login routes
+    if (window.location.pathname.startsWith('/dashboard') || window.location.pathname.startsWith('/login') || $activeTab === 'dash') {
+      return;
+    }
 
     try {
       lenisInstance = new Lenis({

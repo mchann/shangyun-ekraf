@@ -5,9 +5,10 @@ import LenisScroll from '../components/LenisScroll.svelte';
 
 interface Props {
   title?: string;
+  enableLenis?: boolean;
 }
 
-const { title = "Shang Yun 尚韵 — Hadiah Imlek" } = Astro.props;
+const { title = "Shang Yun 尚韵 — Hadiah Imlek", enableLenis = true } = Astro.props;
 ---
 
 <!DOCTYPE html>
@@ -43,8 +44,8 @@ const { title = "Shang Yun 尚韵 — Hadiah Imlek" } = Astro.props;
       </filter>
     </svg>
 
-    <!-- Lenis Smooth Scrolling Engine -->
-    <LenisScroll client:load />
+    <!-- Lenis Smooth Scrolling Engine (Only for pages requiring smooth scrolling) -->
+    {enableLenis && <LenisScroll client:load />}
 
     <slot />
   </body>

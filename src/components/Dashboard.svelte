@@ -148,7 +148,7 @@
   }
 </script>
 
-<div class="dash-layout">
+<div class="dash-layout" data-lenis-prevent>
   <!-- Mobile Backdrop -->
   {#if sidebarOpen}
     <div 
@@ -161,7 +161,7 @@
   {/if}
 
   <!-- ==================== SIDEBAR (Sesuai Referensi) ==================== -->
-  <aside class="dash-sidebar" class:open={sidebarOpen}>
+  <aside class="dash-sidebar" data-lenis-prevent class:open={sidebarOpen}>
     <!-- Brand / Logo Area -->
     <div class="sidebar-header">
       <div class="seal" aria-hidden="true">尚</div>
@@ -308,7 +308,7 @@
   </aside>
 
   <!-- ==================== MAIN CONTENT AREA ==================== -->
-  <div class="dash-content-area">
+  <div class="dash-content-area" data-lenis-prevent>
     <!-- Top Navbar in Dashboard -->
     <header class="dash-topbar">
       <div class="topbar-left">
@@ -399,7 +399,7 @@
     </header>
 
     <!-- Main Canvas Content -->
-    <main class="dash-main-scroll">
+    <main class="dash-main-scroll" data-lenis-prevent tabindex="0">
       {#if currentMenu === 'overview' || currentMenu === 'products'}
         <!-- ==================== BANNER SELAMAT DATANG (Sesuai Referensi) ==================== -->
         <div class="welcome-banner-card">
@@ -671,16 +671,22 @@
      ======================================================== */
   .dash-layout {
     display: flex;
-    min-height: 100vh;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
     background: var(--bg-primary);
     color: var(--white);
     position: relative;
     font-family: Jost, system-ui, sans-serif;
+    overflow: hidden;
   }
 
   /* SIDEBAR */
   .dash-sidebar {
     width: 260px;
+    height: 100%;
+    max-height: 100vh;
+    max-height: 100dvh;
     background: var(--bg-secondary);
     border-right: 1px solid var(--card-stat-border);
     display: flex;
@@ -688,6 +694,10 @@
     justify-content: space-between;
     padding: 24px 16px;
     flex-shrink: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
     transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.32s ease;
     z-index: 50;
   }
@@ -916,12 +926,16 @@
 
   /* ==================== CONTENT CANVAS & TOPBAR ==================== */
   .dash-content-area {
-    flex: 1;
+    flex: 1 1 0%;
     display: flex;
     flex-direction: column;
     min-width: 0;
-    height: 100vh;
+    min-height: 0;
+    height: 100%;
+    max-height: 100vh;
+    max-height: 100dvh;
     overflow: hidden;
+    position: relative;
   }
 
   /* TOPBAR */
@@ -1137,9 +1151,34 @@
 
   /* MAIN SCROLL CONTAINER */
   .dash-main-scroll {
-    flex: 1;
+    flex: 1 1 0%;
+    min-height: 0;
+    height: 100%;
     overflow-y: auto;
-    padding: 24px 28px 48px;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    padding: 24px 28px 64px;
+    outline: none;
+    scroll-behavior: smooth;
+  }
+
+  .dash-main-scroll::-webkit-scrollbar,
+  .dash-sidebar::-webkit-scrollbar {
+    width: 7px;
+  }
+  .dash-main-scroll::-webkit-scrollbar-track,
+  .dash-sidebar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .dash-main-scroll::-webkit-scrollbar-thumb,
+  .dash-sidebar::-webkit-scrollbar-thumb {
+    background: rgba(224, 181, 98, 0.28);
+    border-radius: 4px;
+  }
+  .dash-main-scroll::-webkit-scrollbar-thumb:hover,
+  .dash-sidebar::-webkit-scrollbar-thumb:hover {
+    background: var(--gold);
   }
 
   /* ==================== WELCOME BANNER CARD ==================== */
