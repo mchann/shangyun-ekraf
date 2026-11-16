@@ -508,6 +508,7 @@
         <span class="seal" aria-hidden="true">尚</span>
         <div class="tabs" role="tablist">
           <button 
+            type="button"
             role="tab" 
             aria-selected={activeMode === 'in'} 
             on:click={() => setMode('in')}
@@ -516,6 +517,7 @@
             <small>Masuk</small>
           </button>
           <button 
+            type="button"
             role="tab" 
             aria-selected={activeMode === 'up'} 
             on:click={() => setMode('up')}
@@ -523,7 +525,7 @@
             <b lang="zh">注册</b>
             <small>Daftar Akun</small>
           </button>
-          <i class="bar {activeMode === 'up' ? 'r' : ''}"></i>
+          <span class="auth-tab-slider {activeMode === 'up' ? 'is-up' : ''}" aria-hidden="true"></span>
         </div>
       </div>
 
@@ -1123,7 +1125,7 @@
     display: flex;
     align-items: center;
     gap: 18px;
-    margin-bottom: 18px;
+    margin-bottom: 20px;
   }
 
   .tabs {
@@ -1131,18 +1133,27 @@
     display: flex;
     flex: 1;
     border-bottom: 1px solid rgba(224, 181, 98, 0.25);
-    overflow: hidden;
   }
 
   .tabs button {
     flex: 1;
     background: none;
     border: 0;
-    padding: 2px 0 10px;
+    padding: 4px 0 12px;
     cursor: pointer;
     color: #cdb59c;
     transition: color 0.2s ease;
     font-family: inherit;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    text-align: center;
+  }
+
+  .tabs button:hover {
+    color: var(--gold, #e0b562);
   }
 
   .tabs button[aria-selected="true"] {
@@ -1152,24 +1163,33 @@
   .tabs b {
     display: block;
     font: 400 28px/1.1 'Ma Shan Zheng', serif;
+    letter-spacing: 0.06em;
   }
 
   .tabs small {
+    display: block;
     font-size: 12px;
+    letter-spacing: 0.04em;
+    margin-top: 2px;
   }
 
-  .bar {
+  .auth-tab-slider {
     position: absolute;
     left: 0;
-    bottom: 0;
+    bottom: -1px;
     width: 50%;
     height: 2px;
+    margin: 0 !important;
+    padding: 0;
     background: var(--gold, #e0b562);
     box-shadow: none;
+    border-radius: 2px 2px 0 0;
     transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: none;
+    z-index: 2;
   }
 
-  .bar.r {
+  .auth-tab-slider.is-up {
     transform: translateX(100%);
   }
 
