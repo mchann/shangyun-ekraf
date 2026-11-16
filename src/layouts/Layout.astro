@@ -36,6 +36,62 @@ const { title = "Shang Yun 尚韵 — Hadiah Imlek", enableLenis = true } = Astr
         #loader { display: none !important; }
       </style>
     </noscript>
+
+    <!-- Critical Anti-FOUC & Instant Luxury Preloader Canvas Baseline -->
+    <style is:inline>
+      html, body {
+        background-color: #0c0605 !important;
+        color: #f6efe2;
+        margin: 0;
+        padding: 0;
+      }
+      #loader {
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 99999 !important;
+        background: #0c0605 !important;
+        display: grid !important;
+        place-items: center !important;
+        overflow: hidden !important;
+      }
+      #loader .lh {
+        position: absolute !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        width: 50.2% !important;
+        background: radial-gradient(120% 90% at 50% 40%, #1a0d0a, #0c0605 70%) !important;
+      }
+      #loader .lh.l { left: 0 !important; }
+      #loader .lh.r { right: 0 !important; }
+      #loader .lc {
+        position: relative !important;
+        z-index: 2 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+      }
+      #loader .lr {
+        position: relative !important;
+        width: 124px !important;
+        height: 124px !important;
+        display: grid !important;
+        place-items: center !important;
+      }
+      #loader .lr svg {
+        position: absolute !important;
+        inset: 0 !important;
+        width: 124px !important;
+        height: 124px !important;
+        max-width: 124px !important;
+        max-height: 124px !important;
+      }
+      #loader .lr circle {
+        fill: none !important;
+        stroke: #b9985c !important;
+        stroke-width: 1 !important;
+      }
+    </style>
+
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Jost:wght@300;400;500;600&family=Ma+Shan+Zheng&display=swap"

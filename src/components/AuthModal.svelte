@@ -9,6 +9,12 @@
     }, 1200);
   }
 
+  function handleBackdropClick(e) {
+    if (e.target === e.currentTarget) {
+      authModalOpen.set(false);
+    }
+  }
+
   // Lock body scroll when modal is open so wheel and touch scroll the modal cleanly
   $: if (typeof document !== 'undefined') {
     if ($authModalOpen) {
@@ -26,7 +32,13 @@
 </script>
 
 {#if $authModalOpen}
-  <div class="auth-modal-overlay" data-lenis-prevent>
+  <div 
+    class="auth-modal-overlay" 
+    data-lenis-prevent
+    on:click={handleBackdropClick}
+    role="dialog"
+    aria-modal="true"
+  >
     <AuthCard isModal={true} initialMode={$authModalTab} onComplete={handleComplete} />
   </div>
 {/if}
@@ -39,8 +51,26 @@
     background: rgba(12, 6, 5, 0.94);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
     animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Custom luxury scrollbar for modal overlay */
+  .auth-modal-overlay::-webkit-scrollbar {
+    width: 8px;
+  }
+  .auth-modal-overlay::-webkit-scrollbar-track {
+    background: rgba(12, 6, 5, 0.8);
+  }
+  .auth-modal-overlay::-webkit-scrollbar-thumb {
+    background: rgba(224, 181, 98, 0.35);
+    border-radius: 4px;
+  }
+  .auth-modal-overlay::-webkit-scrollbar-thumb:hover {
+    background: var(--gold, #e0b562);
   }
 
   @keyframes fadeIn {

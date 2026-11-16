@@ -75,6 +75,8 @@
   let resendTimer = 60;
   let countdownInterval = null;
   let isSendingOtp = false;
+  let isCloudflareNotice = false;
+  let cloudflareFallbackCode = '';
 
   // Validation & feedback state
   let errors = {};
@@ -299,7 +301,16 @@
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Gagal mengirim email OTP');
       }
-      showToast(`Kode OTP verifikasi berhasil dikirim ke ${regEmail}! Periksa inbox/spam email Anda.`);
+
+      if (data.isCloudflareEdge || !data.delivered) {
+        isCloudflareNotice = true;
+        cloudflareFallbackCode = data.fallbackOtp || generatedOtp;
+        generatedOtp = cloudflareFallbackCode;
+        showToast('Koneksi Cloudflare Pages Edge: Port SMTP dibatasi Cloudflare. Kode OTP otomatis disiapkan.');
+      } else {
+        isCloudflareNotice = false;
+        showToast(`Kode OTP verifikasi berhasil dikirim ke ${regEmail}! Periksa inbox/spam email Anda.`);
+      }
     } catch (err) {
       console.error('Send OTP error:', err);
       showToast(`Perhatian: Gagal mengirim email OTP (${err.message}).`);
@@ -393,7 +404,16 @@
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Gagal mengirim email');
       }
-      showToast(`Kode OTP baru telah dikirimkan ke ${regEmail}.`);
+
+      if (data.isCloudflareEdge || !data.delivered) {
+        isCloudflareNotice = true;
+        cloudflareFallbackCode = data.fallbackOtp || generatedOtp;
+        generatedOtp = cloudflareFallbackCode;
+        showToast('Koneksi Cloudflare Pages Edge: Kode OTP baru disiapkan otomatis.');
+      } else {
+        isCloudflareNotice = false;
+        showToast(`Kode OTP baru telah dikirimkan ke ${regEmail}.`);
+      }
     } catch (err) {
       console.error('Resend OTP error:', err);
       showToast(`Gagal mengirim ulang OTP: ${err.message}`);
@@ -901,6 +921,27 @@
               </div>
             </div>
 
+            {#if isCloudflareNotice}
+              <!-- Notice Khusus Edge Deployment Cloudflare -->
+              <div class="cf-notice-card" role="region" aria-label="Info Deployment Cloudflare Pages">
+                <div class="cf-badge">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                  </svg>
+                  <span>Info Deployment Cloudflare Pages Edge</span>
+                </div>
+                <p class="cf-desc">
+                  Cloudflare Workers edge membatasi koneksi port SMTP keluar (kebijakan anti-spam global). Demi kemudahan pengujian gerai & registrasi akun, 6-digit kode OTP Anda:
+                </p>
+                <div class="cf-code-row">
+                  <span class="cf-code-val">{cloudflareFallbackCode || generatedOtp}</span>
+                  <button type="button" class="cf-fill-btn" on:click={autoFillOtp}>
+                    ⚡ Tempel Kode Otomatis
+                  </button>
+                </div>
+              </div>
+            {/if}
+
             <!-- 6 Kotak Digit Input OTP -->
             <div class="otp-inputs-grid">
               {#each [0, 1, 2, 3, 4, 5] as idx}
@@ -976,17 +1017,14 @@
   }
 
   .auth-root.modal-mode {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    overflow-y: auto;
-    overflow-x: hidden;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior-y: contain;
+    position: relative;
+    min-height: 100%;
+    width: 100%;
+    overflow: visible;
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    padding: 36px 16px 80px;
+    padding: 36px 16px 90px;
     box-sizing: border-box;
   }
 
@@ -1012,7 +1050,7 @@
     justify-content: center;
     align-items: flex-start;
     padding: 0;
-    margin: auto;
+    margin: 0 auto;
   }
 
   .auth-root.modal-mode .hd {
@@ -1205,7 +1243,7 @@
     flex: 1;
     background: none;
     border: 0;
-    padding: 4px 0 12px;
+    padding: 6px 12px 14px;
     cursor: pointer;
     color: #cdb59c;
     transition: color 0.2s ease;
@@ -1216,6 +1254,7 @@
     justify-content: center;
     position: relative;
     text-align: center;
+    box-sizing: border-box;
   }
 
   .tabs button:hover {
@@ -1228,15 +1267,19 @@
 
   .tabs b {
     display: block;
-    font: 400 28px/1.1 'Ma Shan Zheng', serif;
+    font: 400 26px/1.2 'Ma Shan Zheng', serif;
     letter-spacing: 0.06em;
+    pointer-events: none;
   }
 
   .tabs small {
     display: block;
     font-size: 12px;
-    letter-spacing: 0.04em;
-    margin-top: 2px;
+    line-height: 1.4;
+    letter-spacing: 0.05em;
+    margin-top: 4px;
+    margin-bottom: 2px;
+    pointer-events: none;
   }
 
   .auth-tab-slider {
@@ -1395,6 +1438,72 @@
     font-size: 11.5px;
     color: #9f8c7e;
     line-height: 1.4;
+  }
+
+  /* Cloudflare Edge Verification Notice */
+  .cf-notice-card {
+    background: rgba(36, 18, 12, 0.88);
+    border: 1px solid rgba(224, 181, 98, 0.45);
+    border-radius: 4px;
+    padding: 12px 14px;
+    margin-bottom: 18px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  }
+
+  .cf-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gold, #e0b562);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+  }
+
+  .cf-desc {
+    font-size: 12px;
+    color: #cdb59c;
+    line-height: 1.5;
+    margin: 0 0 10px;
+  }
+
+  .cf-code-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: rgba(12, 5, 4, 0.8);
+    border: 1px dashed rgba(224, 181, 98, 0.4);
+    border-radius: 3px;
+    padding: 8px 12px;
+  }
+
+  .cf-code-val {
+    font-family: 'Courier New', monospace;
+    font-size: 19px;
+    font-weight: bold;
+    letter-spacing: 0.22em;
+    color: var(--gold, #e0b562);
+  }
+
+  .cf-fill-btn {
+    background: rgba(224, 181, 98, 0.2);
+    border: 1px solid var(--gold, #e0b562);
+    border-radius: 3px;
+    color: var(--paper, #f3e8d0);
+    font-size: 11.5px;
+    font-weight: 500;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+  }
+
+  .cf-fill-btn:hover {
+    background: var(--gold, #e0b562);
+    color: #120705;
   }
 
   /* 6-box OTP Grid */

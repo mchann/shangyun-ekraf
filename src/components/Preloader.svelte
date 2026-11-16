@@ -47,8 +47,8 @@
     <div class="lh r"></div>
     <div class="lc">
       <div class="lr">
-        <svg viewBox="0 0 124 124" aria-hidden="true">
-          <circle cx="62" cy="62" r="54" />
+        <svg viewBox="0 0 124 124" width="124" height="124" fill="none" aria-hidden="true">
+          <circle cx="62" cy="62" r="54" fill="none" stroke="#b9985c" stroke-width="1" />
         </svg>
         <span class="seal" lang="zh" aria-hidden="true">尚</span>
       </div>
