@@ -127,6 +127,40 @@
     passStrength = s;
   }
 
+  function handlePhoneInput(e) {
+    const clean = e.target.value.replace(/\D/g, '');
+    regWa = clean;
+    e.target.value = clean;
+    if (errors.regWa) errors.regWa = '';
+  }
+
+  function handlePhoneKeydown(e) {
+    if (['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+      return;
+    }
+    if (e.ctrlKey || e.metaKey) {
+      return;
+    }
+    if (!/^\d$/.test(e.key)) {
+      e.preventDefault();
+    }
+  }
+
+  function handlePhonePaste(e) {
+    e.preventDefault();
+    const pasted = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+    const digits = pasted.replace(/\D/g, '');
+    const input = e.target;
+    const start = input.selectionStart || 0;
+    const end = input.selectionEnd || 0;
+    const val = input.value;
+    const nextVal = (val.slice(0, start) + digits + val.slice(end)).replace(/\D/g, '');
+    regWa = nextVal;
+    input.value = nextVal;
+    input.setSelectionRange(start + digits.length, start + digits.length);
+    if (errors.regWa) errors.regWa = '';
+  }
+
   function validateLogin() {
     errors = {};
     if (!loginUser.trim()) {
@@ -150,8 +184,13 @@
     if (!emRegex.test(regEmail.trim())) {
       errors.regEmail = 'Masukkan alamat email yang valid.';
     }
-    if (regType === 'seller' && !regWa.trim()) {
-      errors.regWa = 'Nomor WhatsApp toko wajib diisi untuk pemesanan katalog.';
+    if (regType === 'seller') {
+      const cleanWa = regWa.replace(/\D/g, '');
+      if (!cleanWa) {
+        errors.regWa = 'Nomor WhatsApp toko wajib diisi khusus angka.';
+      } else if (cleanWa.length < 9) {
+        errors.regWa = 'Nomor WhatsApp minimal 9 digit angka (contoh: 081234567890).';
+      }
     }
     if (regPass.length < 8) {
       errors.regPass = 'Kata sandi minimal 8 karakter.';
@@ -463,7 +502,7 @@
   });
 </script>
 
-<div class="auth-root {isModal ? 'modal-mode' : ''}">
+<div class="auth-root {isModal ? 'modal-mode' : ''}" data-lenis-prevent>
   <!-- AUTHENTIC TRADITIONAL CHINESE SHANSHUI LANDSCAPE BACKGROUND -->
   <div class="scene shanshui-bg" aria-hidden="true">
     <div class="bg-overlay"></div>
@@ -700,8 +739,13 @@
                   <input 
                     id="se-wa" 
                     type="tel"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
                     placeholder="081234567890" 
                     bind:value={regWa}
+                    on:input={handlePhoneInput}
+                    on:keydown={handlePhoneKeydown}
+                    on:paste={handlePhonePaste}
                   />
                 </div>
                 {#if errors.regWa}
@@ -932,20 +976,37 @@
     inset: 0;
     z-index: 1000;
     overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    padding: 24px 16px;
+    padding: 36px 16px 80px;
     box-sizing: border-box;
+  }
+
+  .auth-root.modal-mode::-webkit-scrollbar {
+    width: 8px;
+  }
+  .auth-root.modal-mode::-webkit-scrollbar-track {
+    background: rgba(12, 6, 5, 0.75);
+  }
+  .auth-root.modal-mode::-webkit-scrollbar-thumb {
+    background: rgba(224, 181, 98, 0.35);
+    border-radius: 4px;
+  }
+  .auth-root.modal-mode::-webkit-scrollbar-thumb:hover {
+    background: var(--gold, #e0b562);
   }
 
   .auth-root.modal-mode .stage {
     min-height: auto;
     width: 100%;
-    max-width: 460px;
+    max-width: 480px;
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start;
     padding: 0;
     margin: auto;
   }
@@ -956,8 +1017,9 @@
 
   .auth-root.modal-mode .card.smooth-card {
     width: 100%;
-    max-width: 460px;
+    max-width: 480px;
     margin: 0 auto;
+    position: relative;
   }
 
   .scene.shanshui-bg {

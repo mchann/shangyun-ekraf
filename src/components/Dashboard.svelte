@@ -595,10 +595,16 @@
               <input 
                 id="wa-in-field" 
                 type="tel" 
-                inputmode="tel" 
+                inputmode="numeric" 
+                pattern="[0-9]*"
                 placeholder="085738211550" 
                 autocomplete="off" 
                 bind:value={waInput}
+                on:input={(e) => { waInput = e.target.value.replace(/\D/g, ''); }}
+                on:keydown={(e) => {
+                  if (['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) || e.ctrlKey || e.metaKey) return;
+                  if (!/^\d$/.test(e.key)) e.preventDefault();
+                }}
               />
               {#if waErr}
                 <div class="err" role="alert">{waErr}</div>

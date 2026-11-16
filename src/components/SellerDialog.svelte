@@ -81,7 +81,19 @@
     <div class="row">
       <label>
         Nomor WhatsApp <span style="color: var(--red)">*</span>
-        <input type="tel" placeholder="081234567890" bind:value={noWa} required />
+        <input 
+          type="tel" 
+          inputmode="numeric"
+          pattern="[0-9]*"
+          placeholder="081234567890" 
+          bind:value={noWa} 
+          on:input={(e) => { noWa = e.target.value.replace(/\D/g, ''); }}
+          on:keydown={(e) => {
+            if (['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) || e.ctrlKey || e.metaKey) return;
+            if (!/^\d$/.test(e.key)) e.preventDefault();
+          }}
+          required 
+        />
       </label>
       <label>
         Spesialisasi
