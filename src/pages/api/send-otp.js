@@ -7,9 +7,12 @@ export async function POST({ request }) {
     const body = await request.json();
     const { email, otp, name, role } = body || {};
 
-    if (!email || !otp) {
+    const targetRecipient = (email || '').trim().toLowerCase();
+    const otpCode = String(otp || '').trim();
+
+    if (!targetRecipient || !targetRecipient.includes('@') || !otpCode) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Email dan kode OTP wajib disertakan.' }),
+        JSON.stringify({ success: false, error: 'Alamat email penerima dan kode OTP wajib disertakan secara valid.' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -29,81 +32,208 @@ export async function POST({ request }) {
       }
     });
 
-    const roleLabel = role === 'seller' ? 'Perajin / Seller Kriya' : 'Pembeli Koleksi';
-    const recipientName = name ? name.trim() : 'Pelanggan Terhormat';
+    const roleLabel = role === 'seller' ? 'Perajin / Mitra Gerai Kriya (卖家/工匠)' : 'Pembeli Koleksi Imlek (尊贵买家)';
+    const recipientName = name && name.trim() ? name.trim() : 'Pelanggan Terhormat (贵宾)';
+
+    // Split 6-digit OTP into individual characters for luxury Chinese lacquer boxes
+    const digits = otpCode.split('').slice(0, 6);
 
     const htmlContent = `
-<!DOCTYPE html>
-<html lang="id">
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-  <meta charset="UTF-8">
-  <title>Kode OTP Verifikasi Shang Yun (尚韵)</title>
-  <style>
-    body { margin: 0; padding: 0; background-color: #0c0605; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f6efe2; }
-    .wrapper { width: 100%; max-width: 600px; margin: 0 auto; background-color: #150b09; border: 1px solid rgba(185, 152, 92, 0.35); border-radius: 8px; overflow: hidden; }
-    .header { background: radial-gradient(120% 90% at 50% 30%, #2a110c, #150b09 70%); padding: 36px 24px; text-align: center; border-bottom: 1px solid rgba(185, 152, 92, 0.25); }
-    .seal-wrap { display: inline-block; width: 54px; height: 54px; line-height: 54px; background: #b8292c; border: 1px solid #b8292c; outline: 1px solid rgba(246, 239, 226, 0.35); border-radius: 3px; font-size: 30px; color: #ffffff; margin-bottom: 12px; }
-    .brand-title { font-size: 26px; letter-spacing: 0.25em; color: #f6efe2; margin: 0; font-weight: 600; }
-    .brand-subtitle { font-size: 15px; letter-spacing: 0.35em; color: #b9985c; margin-top: 6px; }
-    .content { padding: 36px 28px; }
-    .greeting { font-size: 18px; color: #f6efe2; margin-bottom: 16px; font-weight: 500; }
-    .intro-text { font-size: 14px; line-height: 1.7; color: #a8968a; margin-bottom: 28px; }
-    .otp-card { background: #0c0605; border: 1px solid #b9985c; border-radius: 6px; padding: 24px; text-align: center; margin: 24px 0; }
-    .otp-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.2em; color: #b9985c; margin-bottom: 8px; }
-    .otp-code { font-size: 38px; font-weight: bold; letter-spacing: 0.35em; color: #f6efe2; margin: 10px 0; font-family: 'Courier New', Courier, monospace; }
-    .otp-validity { font-size: 12px; color: #a8968a; }
-    .warning-box { background: rgba(184, 41, 44, 0.1); border-left: 3px solid #b8292c; padding: 12px 16px; font-size: 13px; color: #d6c8b4; line-height: 1.5; margin-top: 24px; }
-    .footer { background: #0c0605; padding: 20px 24px; text-align: center; border-top: 1px solid rgba(185, 152, 92, 0.15); font-size: 12px; color: #7a6a5e; }
-  </style>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kode Verifikasi OTP Shang Yun (尚韵)</title>
 </head>
-<body>
-  <div style="padding: 24px 12px; background-color: #0c0605;">
-    <div class="wrapper">
-      <div class="header">
-        <div class="seal-wrap">尚</div>
-        <h1 class="brand-title">Shang Yun</h1>
-        <div class="brand-subtitle">尚韵 · 传承与精致</div>
-      </div>
-      <div class="content">
-        <div class="greeting">Halo, ${recipientName}</div>
-        <p class="intro-text">
-          Terima kasih telah melakukan pendaftaran di platform kriya Imlek <b>Shang Yun (尚韵)</b> sebagai <b>${roleLabel}</b>.
-          Untuk memastikan keamanan akun dan menyelesaikan proses aktivasi, gunakan 6-digit kode verifikasi di bawah ini:
-        </p>
+<body style="margin: 0; padding: 0; background-color: #0c0605; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Songti SC', 'STSong', Georgia, serif; color: #f6efe2;">
 
-        <div class="otp-card">
-          <div class="otp-label">Kode Verifikasi OTP Anda</div>
-          <div class="otp-code">${otp}</div>
-          <div class="otp-validity">Berlaku selama 10 menit</div>
-        </div>
+  <!-- OUTER WRAPPER TABLE -->
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #0c0605; background: radial-gradient(circle at 50% 20%, #1a0b08 0%, #0c0605 100%); padding: 30px 10px;">
+    <tr>
+      <td align="center">
 
-        <div class="warning-box">
-          <strong>Perhatian Keamanan:</strong> Jangan membagikan kode OTP ini kepada siapa pun, termasuk pihak yang mengatasnamakan Shang Yun. Jika Anda tidak merasa melakukan pendaftaran ini, silakan abaikan email ini.
-        </div>
-      </div>
-      <div class="footer">
-        <p style="margin: 0 0 6px;">Shang Yun (尚韵) — Seni Kriya Imlek Mewah Nusantara.</p>
-        <p style="margin: 0;">Email ini dikirimkan otomatis oleh sistem verifikasi keamanan Shang Yun.</p>
-      </div>
-    </div>
-  </div>
+        <!-- MAIN CARD TABLE -->
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 580px; background-color: #150b09; border: 1.5px solid #b9985c; border-radius: 8px; overflow: hidden; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75);">
+          
+          <!-- TOP AUSPICIOUS CHINESE BANNER -->
+          <tr>
+            <td style="background: linear-gradient(90deg, #7a120d 0%, #a8241b 50%, #7a120d 100%); padding: 10px 16px; text-align: center; border-bottom: 1px solid #d4af37;">
+              <span style="font-size: 12px; letter-spacing: 0.35em; color: #f6efe2; font-weight: 500;">❖ 尚 韵 · SHANG YUN ❖ 岁 序 更 新 · 礼 敬 团 圆 ❖</span>
+            </td>
+          </tr>
+
+          <!-- HEADER WITH TRADITIONAL CHINESE SEAL -->
+          <tr>
+            <td align="center" style="padding: 38px 24px 20px; background: radial-gradient(120% 90% at 50% 30%, #29120e 0%, #150b09 70%);">
+              
+              <!-- Double Border Seal Stamp -->
+              <table cellpadding="0" cellspacing="0" border="0" style="margin: 0 auto 16px;">
+                <tr>
+                  <td align="center" valign="middle" style="width: 58px; height: 58px; background-color: #b8292c; border: 2px solid #b8292c; outline: 1px solid rgba(246, 239, 226, 0.45); border-radius: 4px; box-shadow: 0 4px 14px rgba(184, 41, 44, 0.4);">
+                    <span style="font-size: 34px; font-weight: normal; color: #ffffff; line-height: 58px; display: block; font-family: 'Songti SC', 'STSong', serif;">尚</span>
+                  </td>
+                </tr>
+              </table>
+
+              <h1 style="margin: 0; font-size: 30px; letter-spacing: 0.28em; color: #f6efe2; font-weight: 600; text-transform: uppercase;">Shang Yun</h1>
+              <div style="margin-top: 6px; font-size: 16px; letter-spacing: 0.35em; color: #d4af37; font-weight: 400; font-family: 'Songti SC', 'STSong', serif;">尚 韵 · 典 藏 雅 礼</div>
+              <div style="margin-top: 14px; display: inline-block; padding: 4px 14px; background-color: rgba(212, 175, 55, 0.12); border: 1px solid rgba(212, 175, 55, 0.35); border-radius: 20px; font-size: 11.5px; letter-spacing: 0.18em; color: #e6c985; text-transform: uppercase;">
+                Verifikasi Keamanan Akun · 账号安全验证
+              </div>
+            </td>
+          </tr>
+
+          <!-- GOLD DIVIDER -->
+          <tr>
+            <td style="padding: 0 32px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="height: 1px; background: linear-gradient(90deg, transparent 0%, #b9985c 50%, transparent 100%);"></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- MAIN BODY CONTENT -->
+          <tr>
+            <td style="padding: 32px 32px 24px;">
+              
+              <!-- Greeting -->
+              <div style="font-size: 19px; color: #f6efe2; font-weight: 500; margin-bottom: 6px;">
+                Yth. <span style="color: #d4af37; font-weight: 600;">${recipientName}</span>,
+              </div>
+              <div style="font-size: 13.5px; color: #d4af37; margin-bottom: 18px; font-family: 'Songti SC', 'STSong', serif; letter-spacing: 0.1em;">
+                恭贺新禧 · 吉祥如意 · 迎春纳福
+              </div>
+
+              <!-- Message -->
+              <p style="margin: 0 0 16px; font-size: 14px; line-height: 1.75; color: #c8b7a6;">
+                Selamat datang di perjamuan seni kriya Imlek <b>Shang Yun (尚韵)</b>. Anda telah mendaftarkan alamat email 
+                <b style="color: #f6efe2; text-decoration: underline;">${targetRecipient}</b> untuk akun 
+                <b style="color: #e6c985;">${roleLabel}</b>.
+              </p>
+              <p style="margin: 0 0 24px; font-size: 14px; line-height: 1.75; color: #c8b7a6;">
+                Untuk menyelesaikan pendaftaran dan mengaktifkan akses Anda, silakan masukkan 6-digit Kode OTP resmi berikut pada formulir verifikasi:
+              </p>
+
+              <!-- LUXURY CHINESE LACQUER OTP CODE DISPLAY -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #0c0605; background: radial-gradient(circle at 50% 50%, #1a0c09 0%, #0c0605 100%); border: 1.5px solid #d4af37; border-radius: 6px; padding: 22px 16px; text-align: center; margin-bottom: 24px;">
+                <tr>
+                  <td align="center">
+                    <div style="font-size: 11px; letter-spacing: 0.32em; color: #b9985c; text-transform: uppercase; font-weight: 600; margin-bottom: 14px;">
+                      — 验证码 · KODE VERIFIKASI KEAMANAN —
+                    </div>
+
+                    <!-- 6 DIGIT LACQUER BOXES -->
+                    <table align="center" cellpadding="0" cellspacing="0" border="0" style="margin: 0 auto 14px;">
+                      <tr>
+                        ${digits.map(d => `
+                          <td style="padding: 0 4px;">
+                            <div style="width: 44px; height: 58px; line-height: 58px; text-align: center; background-color: #1e0e0a; border: 1.5px solid #d4af37; border-radius: 4px; font-size: 34px; font-weight: bold; color: #f6efe2; font-family: 'Courier New', Courier, monospace; box-shadow: 0 4px 12px rgba(0,0,0,0.6);">
+                              ${d}
+                            </div>
+                          </td>
+                        `).join('')}
+                      </tr>
+                    </table>
+
+                    <div style="font-size: 12px; color: #a8968a; letter-spacing: 0.08em;">
+                      <span style="color: #e6c985;">⏱ Berlaku 10 Menit</span> · 有效期十分钟
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- 4 CHINESE CRAFT PILLARS -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: rgba(22, 10, 8, 0.6); border: 1px solid rgba(185, 152, 92, 0.22); border-radius: 4px; padding: 12px; margin-bottom: 24px;">
+                <tr>
+                  <td width="25%" align="center" style="font-size: 11.5px; color: #cdb59c; border-right: 1px solid rgba(185, 152, 92, 0.15);">
+                    <span style="display: block; font-size: 15px; color: #d4af37; font-family: 'Songti SC', 'STSong', serif;">绣金</span>
+                    Sulam Emas
+                  </td>
+                  <td width="25%" align="center" style="font-size: 11.5px; color: #cdb59c; border-right: 1px solid rgba(185, 152, 92, 0.15);">
+                    <span style="display: block; font-size: 15px; color: #d4af37; font-family: 'Songti SC', 'STSong', serif;">点茶</span>
+                    Seduh Teh
+                  </td>
+                  <td width="25%" align="center" style="font-size: 11.5px; color: #cdb59c; border-right: 1px solid rgba(185, 152, 92, 0.15);">
+                    <span style="display: block; font-size: 15px; color: #d4af37; font-family: 'Songti SC', 'STSong', serif;">书福</span>
+                    Tulis Fu
+                  </td>
+                  <td width="25%" align="center" style="font-size: 11.5px; color: #cdb59c;">
+                    <span style="display: block; font-size: 15px; color: #d4af37; font-family: 'Songti SC', 'STSong', serif;">封红</span>
+                    Angpao
+                  </td>
+                </tr>
+              </table>
+
+              <!-- SECURITY WARNING -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: rgba(184, 41, 44, 0.1); border-left: 3px solid #b8292c; padding: 12px 14px; border-radius: 0 4px 4px 0;">
+                <tr>
+                  <td>
+                    <div style="font-size: 12.5px; line-height: 1.6; color: #d6c8b4;">
+                      <strong style="color: #fca5a5;">🔒 Catatan Keamanan Penting:</strong> 
+                      Jangan pernah memberitahukan kode verifikasi ini kepada siapa pun, termasuk pihak yang mengatasnamakan pengelola Shang Yun. 
+                      Jika Anda tidak merasa melakukan pendaftaran akun ini, silakan abaikan email ini.
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- CHINESE CALLIGRAPHY CLOSING NOTE -->
+          <tr>
+            <td align="center" style="padding: 10px 32px 28px; background-color: #120907;">
+              <div style="font-size: 22px; color: #d4af37; font-family: 'Songti SC', 'STSong', serif; letter-spacing: 0.2em; margin-bottom: 6px;">
+                礼轻情意重 · 匠心载福至
+              </div>
+              <div style="font-size: 12px; color: #a8968a; font-style: italic; max-width: 440px; margin: 0 auto; line-height: 1.5;">
+                "Hadiah boleh sederhana, namun ketulusan memilih dan sentuhan tangan para perajin menjadikannya sebuah perjamuan penuh makna."
+              </div>
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td align="center" style="padding: 22px 24px; background-color: #0c0605; border-top: 1px solid rgba(185, 152, 92, 0.2); font-size: 11.5px; color: #7a6a5e; line-height: 1.7;">
+              <div style="color: #b9985c; font-weight: 500; margin-bottom: 4px;">
+                Shang Yun (尚韵) — Seni Kriya Imlek Mewah Nusantara
+              </div>
+              <div>Email pengirim resmi: <span style="color: #9f8c7e;">${user}</span></div>
+              <div style="margin-top: 6px; color: #5a4b41; font-size: 10.5px;">
+                Email ini dikirimkan secara otomatis oleh sistem autentikasi gerai Shang Yun untuk penerima: <b>${targetRecipient}</b>.
+              </div>
+            </td>
+          </tr>
+
+        </table>
+
+      </td>
+    </tr>
+  </table>
+
 </body>
 </html>
     `;
 
     const info = await transporter.sendMail({
       from: `"Shang Yun (尚韵)" <${user}>`,
-      to: email,
-      subject: `[Shang Yun 尚韵] ${otp} adalah Kode Verifikasi OTP Anda`,
-      text: `Halo ${recipientName},\n\nKode verifikasi OTP pendaftaran Shang Yun Anda adalah: ${otp}\n\nKode ini berlaku selama 10 menit. Jangan berikan kode ini kepada siapa pun.\n\nSalam hangat,\nShang Yun (尚韵)`,
+      to: targetRecipient,
+      subject: `[Shang Yun 尚韵] 验证码: ${otpCode} adalah Kode Verifikasi Akun Anda`,
+      text: `Yth. ${recipientName},\n\nKode Verifikasi OTP pendaftaran Shang Yun Anda adalah: ${otpCode}\n\nKode ini berlaku selama 10 menit untuk email ${targetRecipient}.\nJangan berikan kode ini kepada siapa pun.\n\nSalam hangat,\nShang Yun (尚韵)`,
       html: htmlContent
     });
+
+    console.log(`[OTP] Email successfully sent to ${targetRecipient} (Message-ID: ${info.messageId})`);
 
     return new Response(
       JSON.stringify({
         success: true,
+        recipient: targetRecipient,
         messageId: info.messageId,
-        message: 'Kode OTP telah berhasil dikirimkan ke email Anda.'
+        message: `Kode OTP telah berhasil dikirimkan ke ${targetRecipient}.`
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
@@ -118,4 +248,3 @@ export async function POST({ request }) {
     );
   }
 }
-

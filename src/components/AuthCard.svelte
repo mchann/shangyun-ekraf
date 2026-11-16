@@ -288,7 +288,7 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: regEmail.trim(),
+          email: regEmail.trim().toLowerCase(),
           otp: generatedOtp,
           name: regName.trim(),
           role: regType
@@ -381,7 +381,7 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: regEmail.trim(),
+          email: regEmail.trim().toLowerCase(),
           otp: generatedOtp,
           name: regName.trim(),
           role: regType
