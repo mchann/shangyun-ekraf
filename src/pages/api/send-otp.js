@@ -17,15 +17,12 @@ export async function POST({ request }) {
       );
     }
 
-    const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-    const port = parseInt(process.env.SMTP_PORT || '465', 10);
-    const user = process.env.SMTP_USER || 'akuadaaa789@gmail.com';
-    const pass = process.env.SMTP_PASS || 'kvtqzwennirvixzb';
+    const user = (import.meta.env?.SMTP_USER || process.env?.SMTP_USER || 'akuadaaa789@gmail.com').trim();
+    const pass = (import.meta.env?.SMTP_PASS || process.env?.SMTP_PASS || 'kvtqzwennirvixzb').trim();
 
+    // Menggunakan preset service 'gmail' yang dioptimalkan oleh nodemailer untuk Google SMTP
     const transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure: port === 465,
+      service: 'gmail',
       auth: {
         user,
         pass
@@ -219,14 +216,18 @@ export async function POST({ request }) {
     `;
 
     const info = await transporter.sendMail({
-      from: `"Shang Yun (尚韵)" <${user}>`,
+      from: `"Shang Yun" <${user}>`,
       to: targetRecipient,
-      subject: `[Shang Yun 尚韵] 验证码: ${otpCode} adalah Kode Verifikasi Akun Anda`,
-      text: `Yth. ${recipientName},\n\nKode Verifikasi OTP pendaftaran Shang Yun Anda adalah: ${otpCode}\n\nKode ini berlaku selama 10 menit untuk email ${targetRecipient}.\nJangan berikan kode ini kepada siapa pun.\n\nSalam hangat,\nShang Yun (尚韵)`,
-      html: htmlContent
+      subject: `[Shang Yun] Kode Verifikasi OTP Anda: ${otpCode}`,
+      text: `Yth. ${recipientName},\n\nKode Verifikasi OTP pendaftaran Shang Yun Anda adalah: ${otpCode}\n\nKode ini berlaku selama 10 menit untuk email ${targetRecipient}.\nJangan berikan kode ini kepada siapa pun.\n\nSalam hangat,\nShang Yun`,
+      html: htmlContent,
+      headers: {
+        'X-Priority': '1',
+        'Importance': 'high'
+      }
     });
 
-    console.log(`[OTP] Email successfully sent to ${targetRecipient} (Message-ID: ${info.messageId})`);
+    console.log(`[OTP] Email successfully sent to ${targetRecipient} (Code: ${otpCode}, Message-ID: ${info.messageId})`);
 
     return new Response(
       JSON.stringify({

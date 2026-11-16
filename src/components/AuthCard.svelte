@@ -281,6 +281,7 @@
     startCountdown();
     regStep = 2;
 
+    console.info(`[Shang Yun OTP] Kode untuk ${regEmail}:`, generatedOtp);
     showToast(`Mengirim kode OTP ke ${regEmail}...`);
 
     try {
@@ -374,6 +375,7 @@
     generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
     resendTimer = 60;
     startCountdown();
+    console.info(`[Shang Yun OTP Resend] Kode untuk ${regEmail}:`, generatedOtp);
     showToast(`Mengirim ulang kode OTP ke ${regEmail}...`);
 
     try {
@@ -893,7 +895,9 @@
               </div>
               <div class="otp-mail-body">
                 <span class="otp-mail-addr">{regEmail}</span>
-                <span class="otp-mail-hint">Silakan periksa kotak masuk atau folder spam email Anda untuk menyalin 6-digit kode OTP keamanan.</span>
+                <span class="otp-mail-hint">
+                  Silakan periksa <b>Kotak Masuk (Inbox)</b>, tab <b>Promosi</b>, atau folder <b>Spam</b> di Gmail Anda untuk menyalin 6-digit kode OTP keamanan dari pengirim <i>akuadaaa789@gmail.com</i>.
+                </span>
               </div>
             </div>
 
