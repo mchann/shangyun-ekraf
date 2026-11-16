@@ -11,9 +11,9 @@ Dokumen ini berisi daftar akun bawaan (dummy / demo) untuk pengujian sistem aute
 
 | Peran | Email / ID Akun | Kata Sandi | Nama Profil | Hak Akses Utama |
 | :--- | :--- | :--- | :--- | :--- |
-| **👑 Admin** | `admin@shangyun.id` | `admin123` | Administrator Platform | Pengawasan platform penuh, pendaftaran gerai/seller baru, pengaturan koneksi Cloudinary & Neon, kelola seluruh produk platform. |
-| **🏮 Seller (Pengrajin)** | `seller@shangyun.id` | `seller123` | Master Chen Zhao (Zhao Atelier Suzhou) | Manajemen produk toko sendiri, upload foto karya ke Cloudinary CDN, edit harga & stok, simpan nomor WhatsApp pemesanan toko. |
-| **🛍️ Pembeli (Buyer)** | `pembeli@shangyun.id` | `pembeli123` | Pembeli Terhormat | Jelajah katalog, pencarian & filter karya, pemesanan langsung via WhatsApp ke toko pengrajin. |
+| **👑 Admin** | `admin@shangyun.id` | `admin123` | Administrator Platform | Khusus pengawasan direktori mitra gerai kriya resmi (Daftar Seller) & pendaftaran gerai baru. Tidak memuat formulir upload katalog seller atau pengaturan nomor seller. |
+| **🏮 Seller (Pengrajin)** | `seller@shangyun.id` | `seller123` | Master Chen Zhao (Zhao Atelier Suzhou) | Manajemen karya gerai sendiri, menu **Pesanan Masuk** terisolasi khusus gerai ini (status konfirmasi, hubungi pembeli via WhatsApp, update status proses/selesai), upload foto karya, edit stok, dan nomor WhatsApp resmi gerai. |
+| **🛍️ Pembeli (Buyer)** | `pembeli@shangyun.id` | `pembeli123` | Pembeli Terhormat | Jelajah katalog kriya Imlek, filter gerai, keranjang pesanan dengan pemisahan per gerai pengrajin, pemesanan langsung via WhatsApp gerai bersangkutan. |
 
 ---
 
