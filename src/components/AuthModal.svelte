@@ -48,13 +48,18 @@
     position: fixed;
     inset: 0;
     z-index: 1000;
-    background: rgba(12, 6, 5, 0.94);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: rgba(12, 6, 5, 0.88);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 16px;
+    box-sizing: border-box;
     animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 

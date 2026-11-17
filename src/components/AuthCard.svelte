@@ -525,25 +525,23 @@
 </script>
 
 <div class="auth-root {isModal ? 'modal-mode' : ''}" data-lenis-prevent>
-  <!-- AUTHENTIC TRADITIONAL CHINESE SHANSHUI LANDSCAPE BACKGROUND -->
-  <div class="scene shanshui-bg" aria-hidden="true">
-    <div class="bg-overlay"></div>
-  </div>
+  {#if !isModal}
+    <!-- AUTHENTIC TRADITIONAL CHINESE SHANSHUI LANDSCAPE BACKGROUND (Khusus Halaman /login) -->
+    <div class="scene shanshui-bg" aria-hidden="true">
+      <div class="bg-overlay"></div>
+    </div>
 
-  <!-- TOP BAR -->
-  <div class="top">
-    <div class="mark">
-      <span class="seal">尚</span>Shang Yun
-    </div>
-    <div class="rt">
-      {#if isModal}
-        <button class="shop close-btn" on:click={closeView}>Tutup &times;</button>
-      {:else}
+    <!-- TOP BAR (Khusus Halaman /login) -->
+    <div class="top">
+      <div class="mark">
+        <span class="seal">尚</span>Shang Yun
+      </div>
+      <div class="rt">
         <a class="shop" href="/">Kembali ke Koleksi</a>
-      {/if}
-      <span class="yr" lang="zh">丁未新春</span>
+        <span class="yr" lang="zh">丁未新春</span>
+      </div>
     </div>
-  </div>
+  {/if}
 
   <!-- MAIN STAGE -->
   <div class="stage">
@@ -1018,37 +1016,27 @@
 
   .auth-root.modal-mode {
     position: relative;
-    min-height: 100%;
+    min-height: auto;
     width: 100%;
+    max-width: 480px;
+    margin: auto;
     overflow: visible;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
-    padding: 36px 16px 90px;
+    padding: 0;
     box-sizing: border-box;
   }
 
   .auth-root.modal-mode::-webkit-scrollbar {
-    width: 8px;
-  }
-  .auth-root.modal-mode::-webkit-scrollbar-track {
-    background: rgba(12, 6, 5, 0.75);
-  }
-  .auth-root.modal-mode::-webkit-scrollbar-thumb {
-    background: rgba(224, 181, 98, 0.35);
-    border-radius: 4px;
-  }
-  .auth-root.modal-mode::-webkit-scrollbar-thumb:hover {
-    background: var(--gold, #e0b562);
+    display: none;
   }
 
   .auth-root.modal-mode .stage {
     min-height: auto;
     width: 100%;
     max-width: 480px;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
+    display: block;
     padding: 0;
     margin: 0 auto;
   }
@@ -1062,6 +1050,7 @@
     max-width: 480px;
     margin: 0 auto;
     position: relative;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
   }
 
   .scene.shanshui-bg {
