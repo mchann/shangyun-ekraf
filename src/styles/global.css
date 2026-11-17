@@ -359,12 +359,19 @@ a:focus-visible {
   transition: background 0.35s ease;
 }
 
+#home {
+  background: var(--bg-primary);
+  transition: background-color 0.32s ease;
+}
+
 /* CATALOG VIEW */
 #v-cat,
 #v-dash {
   max-width: 1160px;
   margin: 0 auto;
   padding: 0 28px;
+  background: var(--bg-primary);
+  transition: background-color 0.32s ease;
 }
 
 .head {
@@ -397,6 +404,11 @@ a:focus-visible {
 .head input:focus,
 .head select:focus {
   border-bottom-color: var(--gold);
+}
+
+.head input::placeholder {
+  color: var(--muted);
+  opacity: 0.75;
 }
 
 .head select option {
