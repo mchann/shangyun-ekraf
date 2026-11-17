@@ -72,10 +72,13 @@
     place-items: center;
     overflow: hidden;
     pointer-events: auto;
+    background: #0c0605;
+    transition: background 0.4s ease 0.4s;
   }
 
   #loader.out {
     pointer-events: none;
+    background: transparent;
   }
 
   .lh {
