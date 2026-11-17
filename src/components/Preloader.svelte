@@ -14,10 +14,10 @@
 
     const finish = () => {
       isOut = true;
+      if (typeof document !== 'undefined') {
+        document.documentElement.classList.remove('ld');
+      }
       setTimeout(() => {
-        if (typeof document !== 'undefined') {
-          document.documentElement.classList.remove('ld');
-        }
         isMounted = false;
       }, 1600);
     };
@@ -72,8 +72,7 @@
     place-items: center;
     overflow: hidden;
     pointer-events: auto;
-    background: #0c0605;
-    transition: background 0.4s ease 0.4s;
+    background: transparent;
   }
 
   #loader.out {

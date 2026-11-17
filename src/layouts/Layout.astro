@@ -53,10 +53,15 @@ const { title = "Shang Yun 尚韵 — Hadiah Imlek", enableLenis = true } = Astr
         position: fixed !important;
         inset: 0 !important;
         z-index: 99999 !important;
-        background: #0c0605 !important;
+        background: transparent !important;
         display: grid !important;
         place-items: center !important;
         overflow: hidden !important;
+        pointer-events: auto;
+      }
+      #loader.out {
+        background: transparent !important;
+        pointer-events: none !important;
       }
       #loader .lh {
         position: absolute !important;
